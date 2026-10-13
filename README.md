@@ -69,10 +69,10 @@
 
 ## 版本
 
-- **插件版本**：`package.json` 的 `version`（当前 **0.6.6**），随 `dsh plugin` 升级。
+- **插件版本**：`package.json` 的 `version`（当前 **0.6.7**），随 `dsh plugin` 升级。
 - **补丁代号**：`patch/` 注入模块的演进代号，由安装器应用到前端 bundle，二者独立演进：
-  - **桌面端（Electron）**：**v10 · 代际自适应**（`patch/patch-frontend-asar.cjs`）——直接在 `app.asar` 内原地替换 bundle，自动重算 integrity、原地回写规避 `EBUSY`。**先扫描 bundle 推导压缩后符号表再生成锚点**，前端升级换了变量名（jsx `f→l`、React `R→j`、`vc(n,r)→vc(e,n)` 等）也能自动适配，探测不到的增强能力跳过并告警、基础渲染照常安装。
-  - **Web 端 / 独立 bundle**：**v6 · 子版本 v6.38**（`patch/install-v6.cjs`），前端兼容 **0.0.1-rc.5 ~ 0.1.0-rc.7** 与 **0.1.0-rc.8 / 0.1.1-rc.x** 两代压缩形态（vc/hp 与 Xu/jd 自动探测适配）。
+  - **桌面端（Electron）**：**v10.1 · 代际自适应 + 模块可升级**（`patch/patch-frontend-asar.cjs`）——直接在 `app.asar` 内原地替换 bundle，自动重算 integrity、原地回写规避 `EBUSY`。**先扫描 bundle 推导压缩后符号表再生成锚点**，前端升级换了变量名（jsx `f→l`、React `R→j`、`vc(n,r)→vc(e,n)` 等）也能自动适配，探测不到的增强能力跳过并告警、基础渲染照常安装。**已是 v10 形态时不再短路跳过**：用模块自身的 `START`/`END` 标记夹取旧模块整段替换为磁盘最新版（`v6-inject.js` 改了 bug 之后重跑 install-all 即生效，不用手动改 asar）。
+  - **Web 端 / 独立 bundle**：**v6 · 子版本 v6.39**（`patch/install-v6.cjs`），前端兼容 **0.0.1-rc.5 ~ 0.1.0-rc.7** 与 **0.1.0-rc.8 / 0.1.1-rc.x** 两代压缩形态（vc/hp 与 Xu/jd 自动探测适配）。
 - 详细变更见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 组成
@@ -180,6 +180,8 @@ node "...\patch\install-all.cjs" "C:\...\dsh-web-frontend\dist\assets\index-*.js
 根因两层：
 1. **渲染层**：`fixVcpBlank` 清理卡片内空行时用的正则 `(<div id="vcp-root"[^>]*>)([\s\S]*)$` **没有右边界**，会从卡片开标签一路吃到消息末尾，把「卡片 → 空行 → Markdown」的分界空行也一并压掉。分界空行消失后，卡片后的内容被并进 HTML 块。
 2. **宿主**：Markdown 的 HTML 块内部本就不解析 Markdown 语法。
+
+> **补丁 v6.39 起渲染层已自愈**（2026-10-13，先生原话「不进入记忆，更新进raw里。」）：`fixVcpBlank` 改为先定位根容器闭合点、空行压缩只在容器内部生效，容器闭合处若紧跟单换行会补成空行——卡片后的 Markdown 重新回到独立块、正常解析。七用例实测全绿。**模型侧的铁律仍然保留**：这是兜底不是许可证，规范输出更省事，也避免流式中间帧的一次重排。
 
 **规则**：
 - 一条消息**要么全 HTML**（`<div id="vcp-root">` 卡片，说明文字用 `<div>`/`<p>`/`<span>` 写在卡内）；

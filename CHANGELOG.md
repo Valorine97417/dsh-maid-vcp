@@ -2,6 +2,13 @@
 
 本文件记录插件版本（`package.json` 的 `version`）与补丁代号（`patch/*` 注入模块）两条线的演进。
 
+## 0.6.7（补丁 v6.39 · 混排自愈 + 模块可升级）
+
+- **混排自愈（补丁 v6.39 · 先生 · 2026-10-13 · 原话「不进入记忆，更新进raw里。」）**：`patch/v6-inject.js` 的 `fixVcpBlank` 不再「一刀切压到消息尾」，改为**先定位根容器闭合点、空行压缩只在容器内部生效**。新增 `function findRootClose(text, from, rootName)`：复用已有的 `nextTag` 分词（`open`/`close`/`self`/`comment`/`decl`/`unknown`/`incomplete`）做深度计数，`script`/`style` 按 `RAWTEXT` 跳过其内容（含 `>` 的选择器不再干扰）、`VOID_TAGS` 不入栈；闭标签在栈中找不到即判定「未闭合」，**退回旧行为**（流式中间帧照旧压到消息尾，终帧自愈）。容器闭合处若紧跟「单换行 + 非空内容」自动补成空行，让卡后的 Markdown 回到独立块、重新走 md 解析。**效果**：一条消息里「卡片 + 空行 + Markdown」的写法从「表格成裸竖线、`**加粗**` 成星号」恢复为正常渲染；纯 Markdown 消息、整条只有卡片、前言补空行（v6.37 修复）三种既有行为均不受影响。七用例实测全绿（A 无卡原样 / B 卡内压缩 / C 卡后恢复空行 / D 单换行自动补 / E 前言补空行 / F 流式未闭合退回 / G 卡内 style 含 `>` 仍能定位）。
+- **补丁器支持模块升级（v10.1）**：`patch/patch-frontend-asar.cjs` 原先一见 `window.__vcpStable` + `window.__vcpGen` 就短路「已是 v10 形态，无需重复安装」——导致 v10 装上之后，`v6-inject.js` 再修 bug 也永远打不进 asar（本次混排自愈就撞上这条）。新增 `updateInjectModule(t)`：用模块自身的 `/*__DSH_V6_INJECT_START__*/` 与 `/*__DSH_V6_INJECT_END__*/` 标记夹取旧模块，**整段替换为磁盘最新版**（仍走 `adaptInject` 做同样的代际适配），内容相同则幂等跳过。边界写明：此路径只升级 C 项（v6 稳定区模块）；A/E/F 三项锚点补丁在已是 v10 形态时无法二次定位，需升级它们必须先还原原始 bundle。
+- **注入提示词补第 5 条输出纪律**：`lib/index.js` 的【输出纪律 · 最高优先级 · 所有 agent 一律遵守】段新增「**一条消息只允许一种格式**：要么全 HTML，要么全 Markdown，绝不混排」。此前该规矩只写进 `DESIGN.md` / `README.md`（仓库文档模型读不到），提示词段缺失 → 靠自觉、一犯再犯；现在每轮注入即约束。
+- **验证**：`node --check patch/v6-inject.js lib/index.js patch/patch-frontend-asar.cjs` 全过；`node patch/install-all.cjs --dry-run` 正确识别并报「C v6 稳定区模块整段升级（81960 → 84204 字符）」；正式写入后 asar 121454696 → **121457576**（bundle 738991 → 741859），回读 sha256 一致；asar 内回读九项特征全 OK（v6.39 注释 / `findRootClose` / 新 `fixVcpBlank` / `__vcpStable` / `__vcpGen` / 双标记 / 代际适配 / 原始 `case"html":return` 已消失）。
+
 ## 0.6.6（文档 · 一条消息只允许一种格式）
 
 - **新增铁律：禁 HTML / Markdown 混排（先生 · 2026-10-13 实测）**。`DESIGN.md §4` 新增第 12 条「一条消息只允许一种格式（HTML 或 Markdown，不可混排）」。根因两层：① 渲染层 `fixVcpBlank` 的第二段正则 `(<div id="vcp-root"[^>]*>)([\s\S]*)$` **无右边界**，从卡片开标签一路吃到消息末尾，连带把「卡片 → 分界空行 → Markdown」的分界空行一并压掉，卡片后的 Markdown 被并进 HTML 块；② 宿主侧 Markdown 的 HTML 块内部本就不解析 Markdown 语法。**症状**：卡片正常渲染，卡片后的 Markdown 表格成一排裸竖线、`**加粗**` 显示成星号——不是渲染失败，是根本没走 Markdown 解析（先生实测截图确认）。**规则**：一条消息要么全 HTML（说明文字用 `<div>`/`<p>`/`<span>` 写进卡内），要么全 Markdown，绝不混排。

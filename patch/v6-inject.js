@@ -1059,13 +1059,67 @@
   // 修复：vcp-root 开标签之后到消息尾的连续空行（\n[ \t]*\n+）压缩为单个
   // \n——整卡回归单一 htmlFlow，尾部文字随之并入块尾文本（渲染为卡后文本，
   // 不影响卡片本体）。只压缩连续空行，单换行不受影响（紧凑排版天然安全）。
+  // v6.39 混排自愈（先生 · 2026-10-13 · 「卡后 Markdown 成裸文本」实测）：
+  // 旧实现第二段正则 `(<div id="vcp-root"[^>]*>)([\s\S]*)$` 【无右边界】——
+  // 从卡的开标签一路吃到消息末尾，把「卡片 → 分界空行 → Markdown」的分界空行
+  // 也一并压掉；分界空行一没，卡后的 Markdown 就被并进同一个 HTML 块
+  // （CommonMark type 6 的 HTML 块内不解析 md）→ 表格成一排裸竖线、
+  // **加粗** 显示成星号——不是渲染失败，是根本没走解析。
+  // 修复：先扫出根容器的闭合点（复用 tagEndAt + nextTag + RAWTEXT/VOID_TAGS，
+  // 深度计数，script/style 按 rawtext 跳过），空行压缩【只在容器内部】生效，
+  // 容器闭合处收手；容器未闭合（流式中间帧）退回旧行为（压到消息尾，终帧自愈）。
+  // 容器闭合处若紧跟「单换行 + 非空内容」，补成空行——让卡后的 Markdown 回到
+  // 独立块、重新走 md 解析。前段「前言补空行」修复（v6.37）不受影响。
+  function findRootClose(text, from, rootName) {
+    var stack = [rootName]
+    var i = from
+    while (i < text.length) {
+      var tok = nextTag(text, i)
+      if (!tok || tok.type === 'incomplete') return -1
+      if (tok.type === 'comment' || tok.type === 'decl' || tok.type === 'unknown') { i = tok.end; continue }
+      if (tok.type === 'open' && RAWTEXT[tok.name]) {
+        var closeIdx = text.toLowerCase().indexOf('</' + tok.name, tok.end)
+        if (closeIdx === -1) return -1
+        var ct = nextTag(text, closeIdx)
+        i = ct ? ct.end : text.length
+        continue
+      }
+      if (tok.type === 'open') {
+        if (!VOID_TAGS[tok.name]) stack.push(tok.name)
+        i = tok.end
+        continue
+      }
+      if (tok.type === 'close') {
+        var found = -1
+        for (var k = stack.length - 1; k >= 0; k--) if (stack[k] === tok.name) { found = k; break }
+        if (found === -1) return -1 // 闭标签对不上 → 视为未闭合，退回旧行为
+        stack.splice(found)
+        if (stack.length === 0) return tok.end
+      }
+      i = tok.end
+    }
+    return -1
+  }
   function fixVcpBlank(text) {
     if (!text || text.indexOf('<div id="vcp-root"') === -1) return text
     var t = text.replace(/([^\n])\n(?= *<div id="vcp-root")/g, '$1\n\n')
-    t = t.replace(/(<div id="vcp-root"[^>]*>)([\s\S]*)$/, function (m, open, rest) {
-      return open + rest.replace(/\n[ \t]*\n+/g, '\n')
+    var m = /<div id="vcp-root"/.exec(t)
+    var openEnd = m ? tagEndAt(t, m.index) : -1
+    if (openEnd !== -1) {
+      var nameMatch = /^<([a-zA-Z][a-zA-Z0-9:-]*)/.exec(t.slice(m.index))
+      var closeEnd = findRootClose(t, openEnd + 1, nameMatch ? nameMatch[1].toLowerCase() : 'div')
+      if (closeEnd !== -1) {
+        var head = t.slice(0, openEnd + 1)
+        var body = t.slice(openEnd + 1, closeEnd).replace(/\n[ \t]*\n+/g, '\n')
+        var rest = t.slice(closeEnd)
+        // 卡后紧跟单换行 + 非空内容 → 补成空行，让 Markdown 回到独立块
+        if (/^\n(?!\n)[ \t]*\S/.test(rest)) rest = '\n' + rest
+        return head + body + rest
+      }
+    }
+    return t.replace(/(<div id="vcp-root"[^>]*>)([\s\S]*)$/, function (mm, open, r) {
+      return open + r.replace(/\n[ \t]*\n+/g, '\n')
     })
-    return t
   }
   function render(raw, streaming) {
     var t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : 0

@@ -237,6 +237,41 @@ function buildMemoAfter(m) {
   return `const ${ref1}=${R}.useRef(null),${ref2}=${R}.useRef(${state}),_t=(function(){try{return window.__vcpStable&&window.__vcpStable.fixBlank?window.__vcpStable.fixBlank(${src}):${src}}catch(_fe){return ${src}}})(),${memoVar}=${R}.useMemo(()=>${cond}?((${ref1}.current===null||${ref2}.current!==${state})&&(${ref1}.current=new ${cls}(${state}),${ref2}.current=${state}),${ref1}.current.render(_t)):(${ref1}.current=null,${fn2}(_t,${state},${a2},${a3})),[_t,${cond},${state},${dep3},${dep4}]);`
 }
 
+/**
+ * 已是 v10 形态时的「模块整段升级」路径（v10.1 · 2026-10-13）。
+ *
+ * 背景：v10 一旦装上，bundle 里就同时有了 __vcpStable 与 __vcpGen，于是
+ * 旧逻辑直接短路 return —— 之后 patch/v6-inject.js 再修 bug（如 v6.39 混排
+ * 自愈），重跑 install-all 也永远打不进去，只能手动改 asar。
+ *
+ * 现在改为：用模块自身的 START/END 标记夹取旧模块，整段替换为磁盘最新版
+ * （经 adaptInject 做同样的代际适配，保证与首次注入形态一致）；内容相同则
+ * 视为幂等、不写入。
+ *
+ * 注意：此路径只更新 C 项（v6 稳定区模块）。A/E/F 三项锚点补丁在已是 v10
+ * 形态时无法二次定位（原文已被替换），需要它们升级时必须先还原原始 bundle。
+ */
+function updateInjectModule(t) {
+  const START = '/*__DSH_V6_INJECT_START__*/'
+  const END = '/*__DSH_V6_INJECT_END__*/'
+  const i = t.indexOf(START)
+  if (i === -1) return null
+  const j = t.indexOf(END, i)
+  if (j === -1) return null
+  const endIdx = j + END.length
+  const oldMod = t.slice(i, endIdx)
+  const newMod = adaptInject(INJECT_SRC, true)
+  if (oldMod === newMod) {
+    return { text: t, applied: ['已是 v10 形态，v6 模块已是最新，无需重复安装'], skipped: [], changed: false }
+  }
+  return {
+    text: t.slice(0, i) + newMod + t.slice(endIdx),
+    applied: ['C v6 稳定区模块整段升级（' + oldMod.length + ' → ' + newMod.length + ' 字符）'],
+    skipped: [],
+    changed: true,
+  }
+}
+
 // ============ 三、补丁主流程 ============
 function patchBundle(text) {
   const applied = []
@@ -244,7 +279,9 @@ function patchBundle(text) {
   let t = text
 
   if (t.includes(V6_MARK) && t.includes('window.__vcpGen')) {
-    return { text: t, applied: ['已是 v10 形态，无需重复安装'], skipped, changed: false }
+    const up = updateInjectModule(t)
+    if (up) return up
+    return { text: t, applied: ['已是 v10 形态，无需重复安装（未找到模块标记）'], skipped, changed: false }
   }
 
   const s = detectSymbols(t)

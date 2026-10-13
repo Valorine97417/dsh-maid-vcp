@@ -163,6 +163,8 @@ Two causes:
 1. **Renderer**: `fixVcpBlank` uses `(<div id="vcp-root"[^>]*>)([\s\S]*)$` to collapse blank lines inside the card — that regex has **no right boundary** and consumes everything up to the end of the message, including the blank line separating the card from the following Markdown. Once that separator is gone, the trailing Markdown is absorbed into the HTML block.
 2. **Host**: a Markdown HTML block never parses Markdown syntax inside itself.
 
+> **Since patch v6.39 the renderer self-heals** (2026-10-13): `fixVcpBlank` now locates the root container's closing tag first and collapses blank lines only *inside* the container; when the closing tag is followed by a single newline plus content, it restores the blank line — so trailing Markdown lands in its own block and parses normally. Seven cases verified green. **The model-side rule still stands**: this is a safety net, not a licence — compliant output is cheaper and avoids one reflow on the streaming frame where the card closes.
+
 **Rules**:
 - One message is **either all HTML** (a `<div id="vcp-root">` card, with prose written inside using `<div>`/`<p>`/`<span>`);
 - **or all Markdown** (plain prose, tables, lists);
