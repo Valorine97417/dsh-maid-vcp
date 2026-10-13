@@ -1,5 +1,5 @@
 /**
- * dsh-raw-html 安全与功能正则行为测试（纯逻辑，零依赖）。
+ * dsh-maid-vcp 安全与功能正则行为测试（纯逻辑，零依赖）。
  *
  * 这些测试验证 patch/patch-frontend.cjs 注入的关键逻辑的行为：
  *   1. 图片转换白名单（case"html" 分支 v 变量）

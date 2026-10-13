@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dsh-raw-html —— app.asar 读写工具（原地替换内部文件）
+ * dsh-maid-vcp —— app.asar 读写工具（原地替换内部文件）
  *
  * Electron 的 asar 格式：
  *   偏移 0    u32 = 4                      （pickle 头）

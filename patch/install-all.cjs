@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dsh-raw-html —— 一键安装器（v8.0 · 桌面端 / Web 端双形态）
+ * dsh-maid-vcp —— 一键安装器（v8.0 · 桌面端 / Web 端双形态）
  *
  * 依次把「HTML 渲染 + SVG/图表/公式 + 可信模式」装进 dsh 前端。
  *
@@ -43,7 +43,7 @@ const dryRun = rawArgs.includes('--dry-run')
 const targetArg = rawArgs.find((a) => !a.startsWith('--')) || ''
 
 console.log('==============================================')
-console.log(' dsh-raw-html 一键安装器（v8.0）')
+console.log(' dsh-maid-vcp 一键安装器（v8.0）')
 console.log('==============================================')
 
 // ---------- 目标探测 ----------

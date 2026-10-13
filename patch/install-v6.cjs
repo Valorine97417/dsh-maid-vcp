@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dsh-raw-html —— 万能安装器（任意状态 → v6 全量补丁）
+ * dsh-maid-vcp —— 万能安装器（任意状态 → v6 全量补丁）
  *
  * 面向「全新电脑 / 其他 agent 环境」的一键安装入口。
  * 无论目标 dsh-web-frontend 的 dist bundle 处于哪个历史状态

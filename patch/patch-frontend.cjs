@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dsh-raw-html —— 前端渲染补丁脚本（VCP 视觉通感协议支持）v6
+ * dsh-maid-vcp —— 前端渲染补丁脚本（VCP 视觉通感协议支持）v6
  *
  * 修改 @deepseek-ai/dsh-web-frontend 的 dist bundle（index-*.js）：
  *
@@ -31,7 +31,7 @@
  *   健康检查：补丁写入后自动运行 `node --check` 校验 bundle 语法；
  *   校验失败自动回滚到本次备份并中止。
  *
- * 开关状态由 dsh-raw-html 插件的「</>」按钮写入 localStorage。
+ * 开关状态由 dsh-maid-vcp 插件的「</>」按钮写入 localStorage。
  *
  * 用法：
  *   node patch-frontend.cjs [bundle路径]

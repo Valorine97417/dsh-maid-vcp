@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dsh-raw-html —— vcp-fast 逻辑仿真测试
+ * dsh-maid-vcp —— vcp-fast 逻辑仿真测试
  *
  * 从（升级后的）bundle 中提取 case"html" 片段，注入最小环境执行，
  * 验证「缓存 + 增量」渲染器的行为：

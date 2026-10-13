@@ -92,7 +92,7 @@ async function main() {
     }
 
     // 截图：把渲染效果存到 8090 服务器目录（先生可直接 http 查看）
-    const OUT_DIR = process.env.E2E_OUT_DIR || path.join(require('os').tmpdir(), 'dsh-raw-html-e2e')
+    const OUT_DIR = process.env.E2E_OUT_DIR || path.join(require('os').tmpdir(), 'dsh-maid-vcp-e2e')
     const names = ['flowchart', 'sequence', 'gantt', 'smartchars']
     const handles = await page.$$('div.mermaid')
     for (let i = 0; i < handles.length; i++) {

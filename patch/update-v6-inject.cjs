@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dsh-raw-html —— v6 模块更新脚本。
+ * dsh-maid-vcp —— v6 模块更新脚本。
  *
  * 场景：bundle 已注入旧版 v6-inject.js（v6.15），本脚本把注入的模块
  * 【整段替换】为磁盘上 patch/v6-inject.js 的最新版（无需回滚重打）。
@@ -52,7 +52,7 @@ try {
   process.exit(1)
 }
 
-// 定位旧模块边界（优先新格式 START/END 标记，兼容旧格式 dsh-raw-html v6 注释头）
+// 定位旧模块边界（优先新格式 START/END 标记，兼容旧格式 dsh-maid-vcp v6 注释头）
 const END_MARK = '/*__DSH_V6_INJECT_END__*/'
 const marker = t.indexOf('/*__DSH_V6_INJECT_START__*/')
 let modStart = -1
@@ -62,7 +62,8 @@ if (marker !== -1) {
   const endIdx = t.indexOf(END_MARK, modStart)
   if (endIdx !== -1) vcDef = endIdx + END_MARK.length
 } else {
-  const legacy = t.indexOf('dsh-raw-html v6')
+  // 兼容两种世代标记：改名前的 asar 里打进的是 'dsh-raw-html v6'。
+  const legacy = Math.max(t.indexOf('dsh-maid-vcp v6'), t.indexOf('dsh-raw-html v6'))
   if (legacy !== -1) {
     modStart = t.lastIndexOf('/**', legacy)
     vcDef = t.indexOf(';function vc(n,r){')

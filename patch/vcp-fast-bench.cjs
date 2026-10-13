@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dsh-raw-html —— vcp-fast 性能基准（真实 DOM 解析环境）
+ * dsh-maid-vcp —— vcp-fast 性能基准（真实 DOM 解析环境）
  *
  * 从 bundle 提取真实 vc() / hp() / case"html" 片段，配合 domino
  * （零依赖、纯 JS 的 html5 DOM 解析器）在 node 里执行，

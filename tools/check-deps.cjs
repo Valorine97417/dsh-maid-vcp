@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dsh-raw-html —— 依赖声明检查器
+ * dsh-maid-vcp —— 依赖声明检查器
  *
  * 教训（2026-08-19 崩溃事件）：lib/index.js import 了 @deepseek-ai/schemastery
  * 却没在 package.json 声明，依赖解析靠运行环境存量 node_modules 碰运气，

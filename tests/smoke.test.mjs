@@ -1,5 +1,5 @@
 /**
- * dsh-raw-html 渲染链路 smoke 测试。
+ * dsh-maid-vcp 渲染链路 smoke 测试。
  *
  * 用 jsdom 模拟浏览器环境，按 bundle 中的真实逻辑执行：
  *   DOMParser 解析 vcp-root → vc() 转 React 元素描述 → 断言结构/安全/交互。

@@ -1,5 +1,5 @@
 /**
- * dsh-raw-html P3 数学公式（KaTeX）测试。
+ * dsh-maid-vcp P3 数学公式（KaTeX）测试。
  *
  * 用 node:vm 加载 patch/v6-inject.js（与 stable.test.mjs 同法），验证：
  *   1. looksLikeSafeSingleDollarMath：公式 vs 价格/路径/模板/表格判定

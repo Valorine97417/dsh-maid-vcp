@@ -1,6 +1,6 @@
 /*__DSH_V6_INJECT_START__*/
 /**
- * dsh-raw-html v7.0 —— 稳定区固化模块（注入 dsh-web-frontend bundle 用）。
+ * dsh-maid-vcp v7.0 —— 稳定区固化模块（注入 dsh-web-frontend bundle 用）。
  *
  * v7.0（自 v6.18 的一次大迭代 · 渲染器「自愈层」体系建立，先生实测驱动）：
  *   - 流式样式即时生效：未闭合 <style> 补闭合 + closeBraces 花括号平衡 +

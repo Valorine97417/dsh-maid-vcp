@@ -1,9 +1,9 @@
-# dsh-raw-html 进化成果报告
+# dsh-maid-vcp 进化成果报告
 
 日期：2026-08-24
 执行：克莉丝（女仆长）
-前因：主人要选一块插件做骨干，妾身审计 A（dsh-raw-html）与 B（dsh-raw-htmlB）后定夺「A 做主干、吸收 B 的增益」，本报告记录落地成果与当前能力全景。
-对比审计原文：`G:\AI\H3MINI\dsh-raw-html-vs-htmlB-审计.md`
+前因：主人要选一块插件做骨干，妾身审计 A（dsh-maid-vcp）与 B（dsh-maid-vcpB）后定夺「A 做主干、吸收 B 的增益」，本报告记录落地成果与当前能力全景。
+对比审计原文：`G:\AI\H3MINI\dsh-maid-vcp-vs-htmlB-审计.md`
 
 ---
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dsh-raw-html —— VCP 加速渲染升级补丁（v2：缓存 + 增量）
+ * dsh-maid-vcp —— VCP 加速渲染升级补丁（v2：缓存 + 增量）
  *
  * 在 patch-frontend.cjs（v1，全量渲染）的基础上，把 case"html" 分支升级为：
  *

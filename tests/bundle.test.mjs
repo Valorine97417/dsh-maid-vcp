@@ -1,5 +1,5 @@
 /**
- * dsh-raw-html bundle 完整性测试。
+ * dsh-maid-vcp bundle 完整性测试。
  *
  * 校验已 patch 的 dsh-web-frontend dist bundle：
  *   1. 语法完整（node --check）

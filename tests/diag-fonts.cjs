@@ -26,14 +26,14 @@ async function main() {
   const page = await browser.newPage()
   page.on('console', (m) => {
     const t = m.text()
-    if (/dsh-raw-html|font|Lanxi|vcp/i.test(t)) console.log('[page]', t.slice(0, 300))
+    if (/dsh-maid-vcp|font|Lanxi|vcp/i.test(t)) console.log('[page]', t.slice(0, 300))
   })
   await page.goto('http://127.0.0.1:3080/', { waitUntil: 'networkidle2', timeout: 90000 })
   await new Promise((r) => setTimeout(r, 6000))
 
   const info = await page.evaluate(() => {
     const out = {}
-    const host = document.getElementById('dsh-raw-html-aes-fontfaces')
+    const host = document.getElementById('dsh-maid-vcp-aes-fontfaces')
     out.fontHostExists = !!host
     out.fontRuleCount = host ? (host.textContent.match(/@font-face/g) || []).length : 0
     out.hasLanxiFree = !!host && host.textContent.indexOf('Lanxi-自由浪漫') !== -1

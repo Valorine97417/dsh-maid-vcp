@@ -12,7 +12,7 @@ const fs = require('fs')
 const path = require('path')
 
 const VENDOR_URL = 'http://127.0.0.1:3080/vendor/mermaid.min.js'
-const OUT_DIR = process.env.E2E_OUT_DIR || path.join(require('os').tmpdir(), 'dsh-raw-html-e2e')
+const OUT_DIR = process.env.E2E_OUT_DIR || path.join(require('os').tmpdir(), 'dsh-maid-vcp-e2e')
 
 async function main() {
   const browser = await puppeteer.launch({
@@ -26,7 +26,7 @@ async function main() {
     // 与 client.js ensureMermaidAssets 相同的加载方式：script src = /vendor URL
     await page.evaluate((src) => {
       const s = document.createElement('script')
-      s.id = 'dsh-raw-html-mermaid'
+      s.id = 'dsh-maid-vcp-mermaid'
       s.src = src
       s.async = true
       document.head.appendChild(s)

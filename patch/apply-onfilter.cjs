@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dsh-raw-html —— 5.4 安全修复应用脚本（on* 过滤 + v6 模块更新）。
+ * dsh-maid-vcp —— 5.4 安全修复应用脚本（on* 过滤 + v6 模块更新）。
  *
  * 一次性完成两处更新（对应克莉丝审计 P0-5.4 与 P1 收尾）：
  *   A. vc() 属性循环（VC_V6）：onclick 特判后加 `if(/^on/i.test(c.name))continue;`
@@ -62,7 +62,8 @@ if (t.includes(VC_NEW)) {
 
 // ---- B. v6-inject.js 模块整段替换 ----
 const newInject = fs.readFileSync(path.join(__dirname, 'v6-inject.js'), 'utf8')
-const marker = t.indexOf('dsh-raw-html v6')
+// 兼容两种世代标记：改名前的 asar 里打进的是 'dsh-raw-html v6'，改名后是 'dsh-maid-vcp v6'。
+const marker = Math.max(t.indexOf('dsh-maid-vcp v6'), t.indexOf('dsh-raw-html v6'))
 if (marker === -1) {
   console.error('[onfilter] B. 未找到 v6 模块（尚未注入？先跑 install-v6.cjs）')
   process.exit(1)

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dsh-raw-html —— 可信模式 vc 层补丁（v7.1）
+ * dsh-maid-vcp —— 可信模式 vc 层补丁（v7.1）
  *
  * 把 bundle 中 vc() 的 script/iframe/object/embed 硬过滤改为「可信模式条件过滤」：
  *   - 可信模式开启（window.__vcpTrusted() 为真，见 patch/v6-inject.js）→ 放行

@@ -1,4 +1,4 @@
-# dsh-raw-html · VCP 视觉通感协议规范插件
+# dsh-maid-vcp · VCP 视觉通感协议规范插件
 
 在 DeepSeek Harness Web GUI 中实现 **VCP（Visual-Synesthesia，视觉通感）协议**：
 消息里的 HTML 从「一坨源码」变成真正渲染的界面，并让 agent 按一套**可维护的设计规范**输出。
@@ -26,13 +26,13 @@
 > **安装（用 `link:` 本地目录依赖，杜绝 `pnpm install` 整包覆盖本地改动）**：
 >
 > ```bash
-> pnpm add "link:D:/DeepSeek Harness/Works/dsh-raw-html"
+> pnpm add "link:D:/DeepSeek Harness/Works/dsh-maid-vcp"
 > ```
 >
 > 或在 profile 的 `package.json` 里直接写：
 >
 > ```json
-> "dsh-raw-html": "link:D:/DeepSeek Harness/Works/dsh-raw-html"
+> "dsh-maid-vcp": "link:D:/DeepSeek Harness/Works/dsh-maid-vcp"
 > ```
 >
 > **为什么是 `link:` 而不是 `file:`**：`link:` 让 pnpm 只在 `node_modules` 建一个指向源目录的符号链接，
@@ -126,7 +126,7 @@
 node "本插件路径\patch\install-all.cjs"
 #    只想体检不写入：加 --dry-run
 
-# 2. 安装插件（卸载用 dsh plugin --profile web remove dsh-raw-html）
+# 2. 安装插件（卸载用 dsh plugin --profile web remove dsh-maid-vcp）
 dsh plugin --profile web add "本插件路径"
 
 # 3. 重启 dsh（桌面端必须重启：asar 头会被进程缓存），然后刷新页面（Ctrl+F5）
@@ -196,7 +196,7 @@ node "...\patch\install-all.cjs" "C:\...\dsh-web-frontend\dist\assets\index-*.js
 - **外置大库**（可选）：默认 `I:\字体`。其他电脑可把字体库目录配置到
   「设置 → 插件 → raw-html → fontsRoot」（或直接修改 `lib/index.js` 里的默认值）。
   没有外置大库也能用：内置 7 款开源字体 + 系统字体兜底。
-- **开关状态**：`渲染 HTML` 与 `美学注入` 两个独立开关，持久化在 `~/.dsh/dsh-raw-html-state.json`，服务重启后自动恢复；渲染关闭时美学自动强制关闭。
+- **开关状态**：`渲染 HTML` 与 `美学注入` 两个独立开关，持久化在 `~/.dsh/dsh-maid-vcp-state.json`，服务重启后自动恢复；渲染关闭时美学自动强制关闭。
 
 ## 使用
 
@@ -226,7 +226,7 @@ node "...\patch\install-all.cjs" "C:\...\dsh-web-frontend\dist\assets\index-*.js
 
 ```powershell
 # 把补丁自动生成的备份改回原名（如 index-*.js.bak-xxx → index-*.js），再移除插件：
-dsh plugin --profile web remove dsh-raw-html
+dsh plugin --profile web remove dsh-maid-vcp
 ```
 
 ## 安全提示

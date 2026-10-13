@@ -1,5 +1,5 @@
 /**
- * dsh-raw-html 可信模式（Trusted Mode）专项测试（v7.2 架构）。
+ * dsh-maid-vcp 可信模式（Trusted Mode）专项测试（v7.2 架构）。
  *
  * v7.2（先生定调）：可信模式的「状态与开关 UI」迁入插件 client 层（lib/client.js）——
  *   - window.__vcpTrusted 由插件定义，随插件启停

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dsh-raw-html —— 一键安装 / 升级脚本（v1 渲染补丁 + v2 加速引擎）
+ * dsh-maid-vcp —— 一键安装 / 升级脚本（v1 渲染补丁 + v2 加速引擎）
  *
  * 自动探测 dsh-web-frontend 的 dist bundle，按需补丁：
  *   - 原始 bundle         → 打 v1（HTML 渲染能力）+ v2（缓存 + 增量加速引擎）

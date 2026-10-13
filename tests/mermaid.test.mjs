@@ -1,5 +1,5 @@
 /**
- * dsh-raw-html P3-Mermaid 图表测试。
+ * dsh-maid-vcp P3-Mermaid 图表测试。
  *
  * 用 node:vm 加载 patch/v6-inject.js（与 math.test.mjs 同法），stub window.mermaid，
  * 验证：

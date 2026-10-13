@@ -1,5 +1,5 @@
 /**
- * dsh-raw-html v6 稳定区固化测试。
+ * dsh-maid-vcp v6 稳定区固化测试。
  *
  * 用 node:vm 加载 patch/v6-inject.js（注入 bundle 的模块），stub 依赖
  * （window / DOMParser / Node / f / vc / hp）后，直接驱动流式帧序列验证：

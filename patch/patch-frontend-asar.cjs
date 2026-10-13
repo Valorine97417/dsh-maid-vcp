@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * dsh-raw-html —— 前端渲染补丁器 v10（代际自适应 · 支持 app.asar 与独立 bundle）
+ * dsh-maid-vcp —— 前端渲染补丁器 v10（代际自适应 · 支持 app.asar 与独立 bundle）
  *
  * 为什么有这一版：
  *   dsh-web-frontend 的 dist bundle 是压缩过的，**每次 dsh 升级，压缩器都会重新
@@ -402,7 +402,7 @@ function main() {
   const args = process.argv.slice(2).filter((a) => !a.startsWith('--'))
 
   console.log('==============================================')
-  console.log(' dsh-raw-html 前端渲染补丁器 v10（代际自适应）')
+  console.log(' dsh-maid-vcp 前端渲染补丁器 v10（代际自适应）')
   console.log('==============================================')
 
   // —— 模式一：独立 bundle 文件 ——
