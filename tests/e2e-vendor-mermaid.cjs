@@ -7,11 +7,12 @@
  *
  * 运行：node tests/e2e-vendor-mermaid.cjs
  */
-const puppeteer = require('G:/AI/AI 助手/VCPChat-main/node_modules/puppeteer')
+const puppeteer = require('./_deps.cjs').puppeteer()
 const fs = require('fs')
+const path = require('path')
 
 const VENDOR_URL = 'http://127.0.0.1:3080/vendor/mermaid.min.js'
-const OUT_DIR = 'G:/深鲸湾/biaoqingbao/comfy_output'
+const OUT_DIR = process.env.E2E_OUT_DIR || path.join(require('os').tmpdir(), 'dsh-raw-html-e2e')
 
 async function main() {
   const browser = await puppeteer.launch({

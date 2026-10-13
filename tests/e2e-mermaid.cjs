@@ -7,10 +7,11 @@
  *
  * 运行：node tests/e2e-mermaid.cjs
  */
-const puppeteer = require('G:/AI/AI 助手/VCPChat-main/node_modules/puppeteer')
+const puppeteer = require('./_deps.cjs').puppeteer()
 const fs = require('fs')
 
-const MERMAID_SRC = 'G:/AI/H3MINI/dsh-raw-html/assets/vendor/mermaid.min.js'
+const path = require('path')
+const MERMAID_SRC = path.join(__dirname, '..', 'assets', 'vendor', 'mermaid.min.js')
 
 async function main() {
   const mermaidSrc = fs.readFileSync(MERMAID_SRC, 'utf8')
@@ -91,7 +92,7 @@ async function main() {
     }
 
     // 截图：把渲染效果存到 8090 服务器目录（先生可直接 http 查看）
-    const OUT_DIR = 'G:/深鲸湾/biaoqingbao/comfy_output'
+    const OUT_DIR = process.env.E2E_OUT_DIR || path.join(require('os').tmpdir(), 'dsh-raw-html-e2e')
     const names = ['flowchart', 'sequence', 'gantt', 'smartchars']
     const handles = await page.$$('div.mermaid')
     for (let i = 0; i < handles.length; i++) {

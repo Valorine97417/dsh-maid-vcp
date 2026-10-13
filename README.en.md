@@ -14,6 +14,30 @@ and the agent outputs following a **maintainable design system**.
 > The rendering capability (HTML/SVG/charts/math) is injected into the frontend bundle by the patch;
 > the plugin provides the toggles and the protocol injection — see the **Install** section below.
 
+> ## ⚠️ This repository is a locally-maintained fork
+>
+> The upstream [`plolpl789/dsh-raw-html`](https://github.com/plolpl789/dsh-raw-html) is **no longer maintained**.
+> This fork takes over maintenance and carries local fixes that upstream does not have:
+>
+> | Fix | Location | What it does |
+> |---|---|---|
+> | Aesthetics panel shows "0 styles" | `lib/index.js` | Upstream's `ctx.inject(['connection'])` callback never fired, so the RPC channel was never registered; replaced with a direct `webServer` prefix route that replicates the host RPC envelope byte-for-byte (origin fence + failure-envelope normalization) |
+> | White-on-white button hover | `lib/client.js` | 7 hover rules moved from `--dsw-alias-button-primary-fill` (near-white in dark theme) to `--dsw-alias-interactive-bg-hover-accent`, with text back on `--dsw-alias-label-primary` |
+> | Trusted Mode on by default + badge hidden | `lib/client.js` | `isTrusted()` now defaults to trusted (only an explicit `'0'` disables it); the shield badge is not mounted by default, avoiding a collision with the `dsh-video-skin` floating pill `#dsvs-knobs-pill` |
+> | Trimmed style library | `styles/` | Only `abyss-maid` is kept; the other 12 styles are archived |
+>
+> **Install via a `link:` local-directory dependency** (so `pnpm install` can never overwrite local edits):
+>
+> ```bash
+> pnpm add "link:D:/DeepSeek Harness/Works/dsh-raw-html"
+> ```
+>
+> **Why `link:` and not `file:`**: `link:` only creates a symlink in `node_modules` pointing at the source
+> directory — `pnpm install` rebuilds the link and **never copies or overwrites the source**. Local fixes are
+> therefore immune to any install. (`file:` directory dependencies copy the source into `node_modules` on
+> install, so edits get shadowed by the copy; `github:` / `git+https:` dependencies re-download the tarball
+> on every install — that is exactly what caused the "whole-package rollback" incident.)
+
 ## ✨ Gallery
 
 > VCP cards rendered in real conversations (5 promo banners):
@@ -44,54 +68,67 @@ and the agent outputs following a **maintainable design system**.
 
 ## Versioning
 
-- **Plugin version**: the `version` in `package.json` (currently **0.3.0**), upgraded via `dsh plugin`.
-- **Patch codename**: the evolution codename of the `patch/` injected modules (currently **v6 · sub-version v6.38**), applied to the frontend bundle by `install-all.cjs`. The two evolve independently. Frontend compatibility: **0.0.1-rc.5 ~ 0.1.0-rc.7** and **0.1.0-rc.8 / 0.1.1-rc.x** (the `vc`/`hp` and `Xu`/`jd` minified shapes are auto-detected).
+- **Plugin version**: the `version` in `package.json` (currently **0.6.5**), upgraded via `dsh plugin`.
+- **Patch codename**: the evolution codename of the `patch/` injected modules, applied to the frontend bundle by the installer. The two evolve independently:
+  - **Desktop (Electron)**: **v10 · generation-adaptive** (`patch/patch-frontend-asar.cjs`) — replaces the bundle in place inside `app.asar`, recomputes integrity, and writes back in place to dodge `EBUSY`. It **scans the bundle to derive the minified symbol table before generating anchors**, so a frontend upgrade that renames variables (jsx `f→l`, React `R→j`, `vc(n,r)→vc(e,n)`, …) is adapted automatically; enhancements it cannot detect are skipped with a warning while base rendering still installs.
+  - **Web / standalone bundle**: **v6 · sub-version v6.38** (`patch/install-v6.cjs`), compatible with **0.0.1-rc.5 ~ 0.1.0-rc.7** and **0.1.0-rc.8 / 0.1.1-rc.x** (the `vc`/`hp` and `Xu`/`jd` minified shapes are auto-detected).
 
 ## Components
 
 | Component | Path | Purpose |
 |---|---|---|
-| One-shot installer | `patch/install-all.cjs` | **Recommended**: one command = `install-v6.cjs` (rendering capability) + `trusted-patch.cjs` (Trusted Mode vc gating); idempotent + backup/rollback + `node --check` health check, aborts safely on anchor mismatch |
-| Universal installer | `patch/install-v6.cjs` | Rendering-capability full v6 patch (component ① of install-all): auto-detects the dist bundle and applies the full v6 patch from any historical state (idempotent + backup/rollback + `node --check` health check) |
-| Trusted Mode vc patch | `patch/trusted-patch.cjs` | Component ② of install-all: turns the hard `script/iframe/object/embed` filter in `vc()` into a conditional one gated by `window.__vcpTrusted` (off by default = safe) |
+| One-shot installer | `patch/install-all.cjs` | **Recommended**: auto-routes by environment — desktop goes to `patch-frontend-asar.cjs` (v10, in-place asar replace); web runs `install-v6.cjs` (rendering) + `update-v6-inject.cjs` (module upgrade) + `trusted-patch.cjs` (Trusted Mode vc gating). Idempotent + backup/rollback + `node --check` health check, aborts safely on anchor mismatch |
+| Desktop patcher | `patch/patch-frontend-asar.cjs` | **v10 · generation-adaptive**: patches `dsh-web-frontend/dist/assets/index-*.js` inside `app.asar`; derives the symbol table first, then generates anchors (A `case"html"` tri-state / B+C generation shim + v6 injection / E `case"code"` fence fallback / F markdown blank-line fix); recomputes integrity and rewrites in place via `ftruncate` to dodge `EBUSY`, auto-rollback on failure |
+| asar I/O library | `patch/asar-io.cjs` | Pure-Node asar parse / entry read / full repack (no third-party deps): 16-byte header + JSON directory tree + tightly packed data region, with integrity recomputation |
+| Universal installer | `patch/install-v6.cjs` | Web-side rendering-capability full v6 patch (web branch step ① of install-all): auto-detects the dist bundle and applies the full v6 patch from any historical state (idempotent + backup/rollback + `node --check`) |
 | Stable-state render module | `patch/v6-inject.js` | Incremental render engine injected into the bundle: container-aware block caching, streaming-tail placeholders, KaTeX math, Mermaid viewer; `onclick="input('...')"` bridge for real interaction; filters script/iframe/object/embed, `on*` events and `javascript:` protocols |
 | **vcp-fast engine** | `patch/v6-inject.js` | Container-aware block-level incrementality: closed blocks cached (element references stay stable across frames → React skips diff → real looping animations), only the tail re-rendered; measured cache-hit **1200~6800×**, incremental **12×** speedup |
 | Plugin (host side) | `lib/index.js` | Toggle state (**persisted to disk**) + VCP protocol injected into the system prompt + `/fonts` font service (**built-in + external library dual source**) + shared knowledge (the protocol carries the local DESIGN.md path for any agent) |
 | Plugin (browser side) | `lib/client.js` | Injects the **「</>」toggle** next to the composer send button + exposes `window.__dshInput` (VCP button → fill & send) |
 | **Built-in fonts** | `assets/fonts/` | **7 open-source fonts (woff2 subsets, ~7.6MB) shipped with the plugin** — WenKai / WenKai Light / MaShanZheng / HeiTi / HeiTi Light / HeiTi Bold / GreatVibes, all OFL-licensed, zero config |
 | Design system docs | `DESIGN.md` | Full spec library: font list / palettes / Chinese typography / security iron laws (knowledge layer; agents may read on demand) |
-| Regression tests | `tests/` | Six suites (stable 47 + security 43 + bundle + smoke + math + mermaid, 200+ assertions): frame sequences / security filtering / bundle integrity (run after any engine change) |
+| Regression tests | `tests/` | Ten suites (stable 47 + security 43 + trusted 21 + bundle + smoke + math + mermaid + boost-fontface, 200+ assertions): frame sequences / security filtering / bundle integrity (run after any engine change). Test dependencies are resolved by `tests/_deps.cjs` (jsdom / puppeteer are **optional dev-time deps**; the plugin itself has zero runtime dependencies) |
 | Benchmark | `patch/vcp-fast-bench.cjs` | Compares old/new paths in a real DOM parsing environment (auto-downloads dependencies, zero install) |
 | Subset tool | `tools/subset_fonts.py` | For maintainers: trims new fonts to common-character subsets + woff2 compression (needs Python + fonttools + brotli) |
 
 ## Install (any DSH environment · for humans & agents alike)
 
-**Recommended: one-shot installer `patch/install-all.cjs`** — one command installs everything
-("rendering capability + Trusted Mode"; internally runs `install-v6.cjs` full render patch then
-`trusted-patch.cjs` vc gating; idempotent, every step auto-backs-up + `node --check` health check,
-aborts safely without writing on anchor mismatch):
+**Recommended: one-shot installer `patch/install-all.cjs`** — one command installs everything.
+It **detects which dsh you are on** and takes the matching path:
+
+- **Desktop (Electron)** → `patch-frontend-asar.cjs` (v10, generation-adaptive): replaces the frontend
+  bundle in place inside `app.asar` and recomputes integrity. **All five capabilities (A/B/C/E/F) land in
+  one step — no other sub-script needed.**
+- **Web / standalone bundle** → `install-v6.cjs` (rendering) → `update-v6-inject.cjs` (module upgrade)
+  → `trusted-patch.cjs` (Trusted Mode vc gating).
+
+Idempotent, every step auto-backs-up + `node --check` health check, aborts safely without writing on
+anchor mismatch.
 
 ```powershell
 # 1. One-shot patch (HTML rendering / SVG cards / Mermaid charts / KaTeX math / Trusted Mode — all in place)
 node "path\to\plugin\patch\install-all.cjs"
+#    dry-run (probe only, writes nothing): add --dry-run
 
 # 2. Install the plugin (uninstall: dsh plugin --profile web remove dsh-raw-html)
 dsh plugin --profile web add "path\to\plugin"
 
-# 3. Restart the dsh service, then hard-refresh the browser (Ctrl+F5 if cached)
-# 4. Toggle the 「</>」switch (render/aesthetic); click the bottom-right Trusted Mode badge for scripts
+# 3. Restart dsh (desktop MUST restart: the asar header is cached by the process), then hard-refresh (Ctrl+F5)
+# 4. Toggle the 「</>」switch (render/aesthetic). Since v7.3 Trusted Mode is on by default and the badge is hidden
 ```
 
 > **Agent install guide** (for users letting their own agent install this plugin — hand these 4 steps
 > to the agent as-is): ① verify Node.js is available (`node -v`); ② run the one-shot installer
-> `install-all.cjs` (auto-detects the dist bundle; pass `<bundle-path>` as an argument if detection
-> fails); ③ register the plugin into the web profile; ④ tell the user to restart dsh and hard-refresh.
-> All patches are idempotent — re-installing or re-running after a dsh upgrade has no side effects.
+> `install-all.cjs` (auto-detects `app.asar` / the dist bundle; pass the target path as an argument if
+> detection fails); ③ register the plugin into the profile; ④ tell the user to restart dsh and
+> hard-refresh. All patches are idempotent — re-installing or re-running after a dsh upgrade has no
+> side effects.
 
-If auto-detection fails, specify the bundle path manually:
+If auto-detection fails, specify the target path manually:
 
 ```powershell
-node "...\patch\install-all.cjs" "C:\...\dsh-web-frontend\dist\assets\index-*.js"
+node "...\patch\install-all.cjs" "D:\...\resources\app.asar"                          # desktop
+node "...\patch\install-all.cjs" "C:\...\dsh-web-frontend\dist\assets\index-*.js"    # web
 ```
 
 > They may also be run individually: `install-v6.cjs` (rendering) / `trusted-patch.cjs` (Trusted Mode vc gating);

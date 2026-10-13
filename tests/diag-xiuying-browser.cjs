@@ -3,7 +3,7 @@
  * 依赖：tools/ 下 python http.server 8091 已启动 + tools/汉仪秀英体简-v2.ttf
  * 运行：node tests/diag-xiuying-browser.cjs
  */
-const puppeteer = require('G:/AI/AI 助手/VCPChat-main/node_modules/puppeteer')
+const puppeteer = require('./_deps.cjs').puppeteer()
 const fs = require('fs')
 
 const EDGE_CANDIDATES = [

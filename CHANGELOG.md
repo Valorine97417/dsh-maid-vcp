@@ -2,6 +2,16 @@
 
 本文件记录插件版本（`package.json` 的 `version`）与补丁代号（`patch/*` 注入模块）两条线的演进。
 
+## 0.6.5（补丁 v10 · 代际自适应 + 仓库工程化）
+
+- **补丁器·桌面端 v10 代际自适应（核心）**：新增 `patch/patch-frontend-asar.cjs` + `patch/asar-io.cjs`——直接在 `app.asar` 内原地替换前端 bundle。**不再写死压缩后的变量名锚点**，改为先扫描 bundle 推导符号表（jsx 运行时 / React / style parse / vc / hp / memo），再按探测结果生成锚点：前端升级换了变量名（jsx `f→l`、React `R→j`、`vc(n,r)→vc(e,n)` 等）也能自动适配；探测不到的增强能力跳过并告警、基础渲染照常安装（旧脚本锚点一失效就全盘中止）。能力集：A `case"html"` 三态化 / B+C 代际 shim + v6 注入 / E `case"code"` 围栏兜底 / F markdown 空行修复。asar 读写全用纯 Node 实现（16 字节头 + JSON 目录树 + 紧排数据区），自动重算每一条 integrity、原地 `ftruncate` + 反向分块回写规避 `EBUSY`，失败自动回滚。
+- **一键安装器·双形态自动分流**：`patch/install-all.cjs` 重写为 v8.0——先判断运行环境再走对应路径：桌面端（Electron）→ `patch-frontend-asar.cjs` 单步装齐五项能力；Web 端 / 独立 bundle → `install-v6.cjs` → `update-v6-inject.cjs` → `trusted-patch.cjs`。新增 `--dry-run` 只体检不写入；探测范围扩到 `$DSH_ASAR` / `%LOCALAPPDATA%\Programs\dsh` / `%PROGRAMFILES%\dsh` 等常见位置。
+- **测试·去硬编码路径**：新增 `tests/_deps.cjs` 依赖定位器，按 6 级顺序（环境变量 `DSH_RAW_HTML_DEPS` → `NODE_PATH` → 本仓库 node_modules → 本机 dsh profile → npm 全局 → 历史位置）寻找 jsdom / puppeteer，找不到时抛出带安装指引的错误。11 个测试脚本的 `G:/AI/AI 助手/VCPChat-main/node_modules/...` 绝对路径全部替换；`MERMAID_SRC` 改 `path.join(__dirname,'..','assets','vendor',...)`；e2e 截图输出改 `E2E_OUT_DIR` 或系统临时目录；`diag-inject-size.mjs` 的 mock 路径改由仓库根推导。`package.json` 补 `devDependencies`（jsdom/puppeteer，**仅开发期，插件本体零运行时依赖**）与 `scripts`（`install-patch` / `install-patch:dry` / `test` / `test:dom`）。
+- **文档·悬空引用清理**：2026-10-13 清库删掉的 12 个风格文档在别处仍有引用，全部改为不悬空——`FRAMING.md` 的 `styles/header-framing.md` 改述为「方法要点已并入本文件」（含归档说明）；`styles/_inbox/README.md` 与 `examples/README.md` 的「按 wabi-sabi.md 骨架」改为「按 `styles/_BASELINE.md` 骨架约定」；`examples/README.md` 归档清单补全 5 个成品并标注「已归档」去向；`DESIGN.md` 字体表去掉 `（warm-minimal）` 括注；`styles/_FONTS.md` 铁律 1 的「warm-minimal 锁定风格」改为通用表述「长文/书信类正文可用 `Lanxi-可宋`」；`tests/diag-inject-size.mjs` 的锁定示例由 `maiden-diary` 改为 `abyss-maid`。
+- **文档·编号修正**：`CHANGELOG.md` 中 `0.6.3` 出现两次（2026-08-29 的「正文标签名截断事故」与 2026-10-13 的「可信模式默认开启」）。按时间线把前者改为 `0.6.2.1（补丁 v7.2.1）`，内容未动，并加注说明；`0.6.0（当前）` 去掉过期的「（当前）」标记。
+- **文档·README 双端说明**：`README.md` 版本章节拆分为「桌面端 v10 代际自适应 / Web 端 v6.38」两条；组成表补 `patch-frontend-asar.cjs`、`asar-io.cjs` 两行；安装章节改写为双形态说明 + 双目标示例。`README.en.md` 补与中文版对齐的 fork 说明块（上游已停更、四项本地修复、`link:` 安装方式与理由）。
+- **验证**：`check-asar-io.mjs` 13/13 全绿（头部解析、packed 紧排校验、条目读出与 integrity/blocks 一致、v6/shim/case"html" 特征、补丁器幂等识别）；`install-all.cjs --dry-run` 桌面端分流正确并识别「已是 v10 形态，无需重复安装」；`node --check` 全仓库测试脚本通过；`diag-inject-size.mjs` / `boost-fontface.test.cjs` 实测通过。
+
 ## 0.6.4（本地化：接管停更上游 + link 依赖）
 
 - **本地化（先生 · 2026-10-13 · 原话「raw插件创作者已经停更了，你帮我弄成本地的。然后上传到我的github里。依赖什么的都加上，避免github下载安装又要重新修复。」）**：上游 `plolpl789/dsh-raw-html` 已停更，本仓库 `Valorine97417/dsh-raw-html` 接管维护，含上游没有的本地修复（美学面板 0 风格、hover 白底白字、可信模式默认开启 + 徽章隐藏、风格库精简为 abyss-maid）。
@@ -24,7 +34,10 @@
 
 - **机制·可信模式迁入插件 client 层——随插件启停（先生 · 2026-08-28 · 追问「停用插件为何还能开关可信模式」）**：先生发现停用 dsh-raw-html 后主界面右下角「可信模式」徽章依然可开关。根因：可信模式全套代码（`isTrusted()`/徽章/`flushTrustedScripts`）焊死在 `patch/v6-inject.js`，由补丁脚本**直接改写主 bundle**（`dsh-web-frontend/dist/assets/index-*.js`），不经插件加载机制——停用插件只撤销插件注册层（`</>` 按钮），bundle 物理修改原封不动。改造：①`lib/client.js` 新增可信模式模块——`isTrusted()`（localStorage/`__DSH_TRUSTED__`）、`window.__vcpTrusted` 定义、右下角盾锁徽章 `installTrustedToggle()`（加载即挂，随插件加载/卸载）；②`patch/v6-inject.js` 的 `isTrusted()` 改为**防御式调用** `window.__vcpTrusted`（未定义→false=安全默认），删除徽章与 `window.__vcpTrusted` 定义，脚本提取/执行（`extractTrustedScripts`/`flushTrustedScripts`）保留但被守卫；③`patch/trusted-patch.cjs` 的 vc() 条件过滤本就是防御式调用，无需改动；④`patch/update-v6-inject.cjs` 支持 `/*__DSH_V6_INJECT_START__*/`/`END` 新标记定位（兼容旧 `dsh-raw-html v6` 标记）。效果：**安装插件 = 可信模式可用；停用插件 = 徽章消失、vc/parseOpen 放行全部回收（安全默认）**；其他用户安装插件后开关层即插即用（执行载体仍需一次性补丁注入渲染能力）。测试 `tests/trusted.test.mjs` 重写为 v7.2 架构（21 断言，覆盖渲染层防御式调用/插件层状态/徽章切换/联动）；全套回归 315 断言全绿。
 
-## 0.6.3（补丁 v7.2 · 正文标签名截断事故）
+## 0.6.2.1（补丁 v7.2.1 · 正文标签名截断事故）
+
+> 编号修正：本条原误标为 `0.6.3`，与 2026-10-13 的「补丁 v7.3 · 可信模式默认开启」重号。按时间线
+> （0.6.2 = 08-28 v7.2 → 本条 = 08-29 v7.2.1 → 0.6.3 = 10-13 v7.3）改为 `0.6.2.1`，内容未动。
 
 - **事故·正文含字面标签名被渲染层截断（先生 · 2026-08-29 · 弹球演示实测反馈）**：先生要求演示可信模式，蓝汐在正文里写了 Markdown 反引号代码 `` `<script>` `` 描述机制——经主 markdown 渲染器输出为**字面开标签文本**（未闭合），VCP 扫描器将其当作未闭合的 script 开标签，触发防御性截断（`patch/v6-inject.js`：script 内容转 `\u0000` 截断丢弃 + 「其后没有闭合标签」的 script 开标签防御），正文从该处起全部消失。**铁律：消息正文（含卡片 HTML 之外的所有文字）禁止出现字面标签名**——需要提及标签时写 HTML 实体 `` `&lt;script&gt;` ``（代码 span 内实体不解析、显示为字面）或中文描述（「script 标签」「脚本标签」）；此铁律与卡片内真实 `<script>`（可信模式演示用）不冲突。意义：安全机制宁可误伤不放过，拦截生效。
 
@@ -32,7 +45,7 @@
 
 - **可信模式（Trusted Mode · 先生定调 2026-08-29）**：双人私密会话内容可信，正文可放行脚本——① `patch/v6-inject.js` 新增 `isTrusted()`（`localStorage['raw-html.trusted']==='1'` 或 `window.__DSH_TRUSTED__===true`）；② 闭合 `<script>` 在 parseFrag 阶段提取出 vdom，消息渲染完成后统一执行一次（`flushTrustedScripts`，不依赖 React 对 script 元素的行为，含 HTML 实体解码）；③ `parseOpen` 属性过滤按可信模式放宽：`on*` 放行、`href/src` 白名单放宽（`blob:` 可用、`javascript:` 仍拒）；④ `patch/trusted-patch.cjs` 将 bundle 中 vc() 的 `script/iframe/object/embed` 硬过滤改为可信条件过滤；⑤ 页面右下角「可信模式」徽章一键开关（默认关闭 = 旧行为完全一致）。部署：`node patch/patch-frontend.cjs` + `node patch/trusted-patch.cjs`；测试 `tests/trusted.test.mjs`（13 断言）；全套回归 307 断言全绿。
 
-## 0.6.0（当前）
+## 0.6.0
 
 - **移除·Lanxi-爱情手写——名不副实带偏 AI（先生 · 2026-08-29 · 目视定性）**：先生指出「爱情手写」**根本不是手写体**（名不副实，psname WHBNJZAQ），AI 看到名字就当手写体用、效果跑偏，必须删。已清除：①DESIGN.md §0.0 别名行（parseFontAliasMap 不再识别 → AI 候选字体无此名）；②assets/fonts/Lanxi-爱情手写.woff2；③tools/subset-style-fonts.py 清单；④ink-letter / wabi-sabi / _FONTS.md 全部引用替换为 `Lanxi-自由浪漫`（真手写体）；⑤examples/情书·春水笺.html src 同步。**教训入档：字体入库前须目视确认「名实相符」——名字含「手写/书/体」不等于真手写**。
 

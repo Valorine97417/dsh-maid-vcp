@@ -8,12 +8,19 @@
 
 | 文件 | 风格 | 点赞日期 | 提炼去向 |
 |---|---|---|---|
-| 今日八卦晚报.html | wire-news（编辑部红） | 2026-08-25 | styles/wire-news.md 点睛技法 1~5 |
-| 雨柬·山城酷热.html | ink-letter（笺信风） | 2026-08-25 | styles/ink-letter.md 点睛技法 1~6 |
+| 今日八卦晚报.html | wire-news（编辑部红）· 已归档 | 2026-08-25 | 技法已随风格文档归档（`Works\styles-archive-2026-10-13\`）；本档保留作参考 |
+| 雨柬·山城酷热.html | ink-letter（笺信风）· 已归档 | 2026-08-25 | 同上 |
+| warm-minimal-宋体体系定案.html | 宋体体系定案 · 已归档 | 2026-08-29 | 结论「长文正文可用 `Lanxi-可宋` 15px」已并入 `styles/_FONTS.md` 铁律 1 |
+| 深夜女郎·顶栏装帧.html | 顶栏装帧方法 | 2026-08-2x | 方法要点见 `FRAMING.md` |
+| 情书·春水笺.html | 书信/诗意类 | 2026-08-2x | 可作 abyss-maid 之外的叙事类参考 |
+
+> 2026-10-13 清库后本插件只剩 `abyss-maid` 一个正式风格；上表标注「已归档」的风格文档已移出
+> `styles/`（备份 `D:\DeepSeek Harness\Works\styles-archive-2026-10-13\`），成品 HTML 仍留档于此，
+> 供需要时反向提炼。
 
 ## 归档规则（agent 共同维护）
 
 1. 做出被先生明确点赞的卡片 → 整卡复制进本目录（文件名用卡片主题）。
 2. 提炼 1~3 条「为什么好看」的技法，写入对应 `styles/<slug>.md` 的【点睛技法】（已有同款则不重复）。
-3. 无对应风格文档 → 按 wabi-sabi.md 骨架新建风格文档，并在 styles/_INDEX.md 追加一行。
+3. 无对应风格文档 → 按 `styles/_BASELINE.md` 的骨架约定新建风格文档，并在 styles/_INDEX.md 追加一行。
 4. 本清单同步补一行。

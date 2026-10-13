@@ -3,10 +3,11 @@
  * 若 4 个 SVG 各自独立 → 环境/结构问题；若叠在一起 → 渲染逻辑问题。
  * 运行：node tests/e2e-mermaid-4blocks.cjs
  */
-const puppeteer = require('G:/AI/AI 助手/VCPChat-main/node_modules/puppeteer')
+const puppeteer = require('./_deps.cjs').puppeteer()
 const fs = require('fs')
 
-const MERMAID_SRC = 'G:/AI/H3MINI/dsh-raw-html/assets/vendor/mermaid.min.js'
+const path = require('path')
+const MERMAID_SRC = path.join(__dirname, '..', 'assets', 'vendor', 'mermaid.min.js')
 
 async function main() {
   const mermaidSrc = fs.readFileSync(MERMAID_SRC, 'utf8')

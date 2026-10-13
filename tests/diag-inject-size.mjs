@@ -30,15 +30,17 @@ function evalReturnString(fnBody, mockVars) {
   return fn(...Object.values(mockVars), path)
 }
 
+const REPO = path.resolve(new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'))
+
 const MOCK = {
-  designPath: 'G:/AI/H3MINI/dsh-raw-html/DESIGN.md',
-  fontsRoot: 'I:\\字体',
-  editorialPath: 'G:/AI/H3MINI/dsh-raw-html/EDITORIAL.md',
-  framingPath: 'G:/AI/H3MINI/dsh-raw-html/FRAMING.md',
-  breathPath: 'G:/AI/H3MINI/dsh-raw-html/BREATH.md',
-  stylesIndex: 'G:/AI/H3MINI/dsh-raw-html/styles/_INDEX.md',
-  stylesDir: 'G:/AI/H3MINI/dsh-raw-html/styles/',
-  STYLES_DIR: 'G:/AI/H3MINI/dsh-raw-html/styles',
+  designPath: path.join(REPO, 'DESIGN.md'),
+  fontsRoot: process.env.DSH_FONTS_ROOT || '',
+  editorialPath: path.join(REPO, 'EDITORIAL.md'),
+  framingPath: path.join(REPO, 'FRAMING.md'),
+  breathPath: path.join(REPO, 'BREATH.md'),
+  stylesIndex: path.join(REPO, 'styles', '_INDEX.md'),
+  stylesDir: path.join(REPO, 'styles') + path.sep,
+  STYLES_DIR: path.join(REPO, 'styles'),
 }
 
 // buildAestheticText 内部引用 STYLES_DIR（模块常量）——替换成 mock
@@ -49,7 +51,7 @@ const aesText = evalReturnString(aesSrc, MOCK)
 const structuralSrc = extractFn('buildStructuralText')
 const structText = evalReturnString(structuralSrc, MOCK)
 
-const LOCKED = '\n\n【风格锁定】用户已锁定风格：maiden-diary——锁定即持续：本会话所有视觉输出一律以该风格为主，无论主题是文学、数据、工程审查还是其他，都 read styles/maiden-diary.md 并按它的色板/骨架/字体/技法组织每一张视觉卡；不得因「主题不匹配」「任务偏理性」等观感自行回退或更换风格，也不得降级成通用排版。仅当用户明确要求改用其他风格时才解锁更换。'
+const LOCKED = '\n\n【风格锁定】用户已锁定风格：abyss-maid——锁定即持续：本会话所有视觉输出一律以该风格为主，无论主题是文学、数据、工程审查还是其他，都 read styles/abyss-maid.md 并按它的色板/骨架/字体/技法组织每一张视觉卡；不得因「主题不匹配」「任务偏理性」等观感自行回退或更换风格，也不得降级成通用排版。仅当用户明确要求改用其他风格时才解锁更换。'
 const DISABLED = '（VCP 视觉通感渲染开关当前关闭：消息中的 HTML 将显示为源码。回复请使用普通 Markdown，不要输出 <div> 等 HTML 容器。）'
 
 function stats(label, text) {

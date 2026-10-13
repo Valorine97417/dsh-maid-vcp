@@ -69,23 +69,27 @@
 
 ## 版本
 
-- **插件版本**：`package.json` 的 `version`（当前 **0.6.0**），随 `dsh plugin` 升级。
-- **补丁代号**：`patch/` 注入模块的演进代号（当前 **v6 · 子版本 v6.38**），由 `install-v6.cjs` 应用到前端 bundle，二者独立演进。前端兼容 **0.0.1-rc.5 ~ 0.1.0-rc.7** 与 **0.1.0-rc.8 / 0.1.1-rc.x** 两代压缩形态（vc/hp 与 Xu/jd 自动探测适配）。
+- **插件版本**：`package.json` 的 `version`（当前 **0.6.4**），随 `dsh plugin` 升级。
+- **补丁代号**：`patch/` 注入模块的演进代号，由安装器应用到前端 bundle，二者独立演进：
+  - **桌面端（Electron）**：**v10 · 代际自适应**（`patch/patch-frontend-asar.cjs`）——直接在 `app.asar` 内原地替换 bundle，自动重算 integrity、原地回写规避 `EBUSY`。**先扫描 bundle 推导压缩后符号表再生成锚点**，前端升级换了变量名（jsx `f→l`、React `R→j`、`vc(n,r)→vc(e,n)` 等）也能自动适配，探测不到的增强能力跳过并告警、基础渲染照常安装。
+  - **Web 端 / 独立 bundle**：**v6 · 子版本 v6.38**（`patch/install-v6.cjs`），前端兼容 **0.0.1-rc.5 ~ 0.1.0-rc.7** 与 **0.1.0-rc.8 / 0.1.1-rc.x** 两代压缩形态（vc/hp 与 Xu/jd 自动探测适配）。
 - 详细变更见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 组成
 
 | 部件 | 位置 | 作用 |
 |---|---|---|
-| 一键安装器 | `patch/install-all.cjs` | **推荐**：一条命令 = `install-v6.cjs`（渲染能力）+ `trusted-patch.cjs`（可信模式 vc 放行）；幂等 + 备份回滚 + `node --check` 健康检查，锚点不匹配安全中止 |
-| 万能安装器 | `patch/install-v6.cjs` | 渲染能力 v6 全量补丁（install-all 的组件①）：自动探测 dist bundle，任意历史状态 → v6（幂等 + 备份回滚） |
+| 一键安装器 | `patch/install-all.cjs` | **推荐**：自动分流双形态——桌面端走 `patch-frontend-asar.cjs`（v10 代际自适应 · asar 原地替换），Web 端依次走 `install-v6.cjs`（渲染能力）+ `update-v6-inject.cjs`（模块升级）+ `trusted-patch.cjs`（可信模式 vc 放行）；幂等 + 备份回滚 + `node --check` 健康检查，锚点不匹配安全中止 |
+| 桌面端补丁器 | `patch/patch-frontend-asar.cjs` | **v10 · 代际自适应**：改 `app.asar` 内 `dsh-web-frontend/dist/assets/index-*.js`，符号表先探测再生成锚点（A `case"html"` 三态化 / B+C 代际 shim + v6 注入 / E `case"code"` 围栏兜底 / F markdown 空行修复）；自动重算 integrity、原地 ftruncate 回写规避 `EBUSY`，失败自动回滚 |
+| asar 读写库 | `patch/asar-io.cjs` | 纯 Node 实现的 asar 解析/条目读取/整包重打包（无第三方依赖）：16 字节头 + JSON 目录树 + 紧排数据区，含 integrity 重算 |
+| 万能安装器 | `patch/install-v6.cjs` | Web 端渲染能力 v6 全量补丁（install-all 的 Web 分支组件①）：自动探测 dist bundle，任意历史状态 → v6（幂等 + 备份回滚） |
 | 稳定区渲染模块 | `patch/v6-inject.js` | 注入 dist bundle 的增量渲染引擎：容器感知块级缓存、流式尾巴占位、KaTeX 公式、Mermaid 查看器；`onclick="input('...')"` 桥接为真实交互；安全过滤 script/iframe/object/embed、on* 事件与 javascript: 协议 |
 | **vcp-fast 加速引擎** | `patch/v6-inject.js` | 容器感知块级增量：已闭合块缓存（元素引用跨帧不变 → React 跳过 diff → 动画真循环），只重渲染尾巴；实测缓存命中 **1200~6800 倍**、增量 **12 倍** 提速 |
 | 插件（Host 半侧） | `lib/index.js` | 渲染/美学双开关状态（**落盘持久化**）+ 系统提示词分层注入（结构铁律必注入 + 美学工具包可选）+ `/fonts` 字体服务（**内置精选 + 外置大库双源**）+ 知识层共享（协议附带本机 DESIGN.md 路径，任何 agent 可读） |
 | 插件（浏览器半侧） | `lib/client.js` | composer 发送按钮旁注入「</>」按钮（点击弹出设置面板，渲染/美学双开关，主题令牌适配深/浅色）+ 暴露 `window.__dshInput`（VCP 按钮 → 填框发送） |
 | **内置精选字体** | `assets/fonts/` | **7 款开源字体（woff2 子集，共约 7.6MB）随插件分发**——文楷/文楷细/马善政楷书/思源黑/思源细黑/思源粗黑/GreatVibes 花体，全部 OFL 授权，任何电脑装上即可用，无需任何配置 |
 | 设计系统文档 | `DESIGN.md` | 完整规范库：字体清单/色板/中文排版/安全铁律（知识层，agent 可按需读取） |
-| 回归测试 | `tests/` | 六套断言（stable 47 + security 43 + bundle + smoke + math + mermaid，共 200+ 项）：帧序列 / 安全过滤 / bundle 完整性（改引擎后必跑） |
+| 回归测试 | `tests/` | 十套断言（stable 47 + security 43 + trusted 21 + bundle + smoke + math + mermaid + boost-fontface，共 200+ 项）：帧序列 / 安全过滤 / bundle 完整性（改引擎后必跑）。测试依赖由 `tests/_deps.cjs` 自动定位（jsdom / puppeteer 为**可选开发期依赖**，插件本体零运行时依赖） |
 | 性能基准 | `patch/vcp-fast-bench.cjs` | domino 真实 DOM 解析环境对比新旧路径耗时与提速倍数（自动下载依赖，零安装） |
 | 子集化工具 | `tools/subset_fonts.py` | 维护者用：把新字体裁剪为常用字子集 + woff2 压缩（需 Python + fonttools + brotli） |
 
@@ -107,33 +111,41 @@
 
 ## 安装（任意 DSH 环境 · 人 & agent 通用）
 
-**推荐：一键安装器 `patch/install-all.cjs`**——一条命令把「渲染能力 + 可信模式」全部装好
-（内部依次执行 `install-v6.cjs` 全量渲染补丁 + `trusted-patch.cjs` 可信模式 vc 放行；
-幂等可重复运行，每一步自动备份 + `node --check` 健康检查，锚点不匹配安全中止不写坏文件）：
+**推荐：一键安装器 `patch/install-all.cjs`**——一条命令把「渲染能力 + 可信模式」全部装好。
+它会**先判断你在哪种 dsh 上**再走对应路径：
+
+- **桌面端（Electron）** → `patch-frontend-asar.cjs`（v10 代际自适应）：直接在 `app.asar` 内原地替换
+  前端 bundle，自动重算 integrity；**A/B/C/E/F 五项能力一次装齐，无需其它子脚本**。
+- **Web 端 / 独立 bundle** → 依次 `install-v6.cjs`（渲染能力）→ `update-v6-inject.cjs`（模块升级）
+  → `trusted-patch.cjs`（可信模式 vc 放行）。
+
+幂等可重复运行，每一步自动备份 + `node --check` 健康检查，锚点不匹配安全中止不写坏文件。
 
 ```powershell
 # 1. 一键打补丁（HTML 渲染 / SVG 卡片 / Mermaid 图表 / KaTeX 公式 / 可信模式，全部就位）
 node "本插件路径\patch\install-all.cjs"
+#    只想体检不写入：加 --dry-run
 
 # 2. 安装插件（卸载用 dsh plugin --profile web remove dsh-raw-html）
 dsh plugin --profile web add "本插件路径"
 
-# 3. 重启 dsh 服务，然后刷新浏览器页面（缓存较旧时 Ctrl+F5）
+# 3. 重启 dsh（桌面端必须重启：asar 头会被进程缓存），然后刷新页面（Ctrl+F5）
 # 4. 打开「</>」开关（渲染/美学）。可信模式 v7.3 起默认开启、徽章默认隐藏，通常无需操作
 ```
 
 > **agent 安装指引**（其他用户让自家 agent 代为安装时，可把以上 4 步原样交给它执行）：
-> ① 确认本机有 Node.js（`node -v`）；② 运行一键安装器 `install-all.cjs`（自动探测 dist bundle，
-> 失败时把 `<bundle路径>` 作为参数传入）；③ 注册插件到 web profile；④ 提醒用户重启 dsh 并强刷。
+> ① 确认本机有 Node.js（`node -v`）；② 运行一键安装器 `install-all.cjs`（自动探测 app.asar / dist bundle，
+> 失败时把目标路径作为参数传入）；③ 注册插件到 profile；④ 提醒用户重启 dsh 并强刷。
 > 补丁全部幂等——重复安装、dsh 升级后重跑都不会产生副作用。
 
-探测失败时手动指定 bundle 路径：
+探测失败时手动指定目标路径：
 
 ```powershell
-node "...\patch\install-all.cjs" "C:\...\dsh-web-frontend\dist\assets\index-*.js"
+node "...\patch\install-all.cjs" "D:\...\resources\app.asar"                    # 桌面端
+node "...\patch\install-all.cjs" "C:\...\dsh-web-frontend\dist\assets\index-*.js"  # Web 端
 ```
 
-> 单独执行亦可：`install-v6.cjs`（渲染能力）/ `trusted-patch.cjs`（可信模式 vc 放行）；
+> Web 端单独执行亦可：`install-v6.cjs`（渲染能力）/ `trusted-patch.cjs`（可信模式 vc 放行）；
 > 历史脚本（v1/v2 时代）`patch/install.cjs`、`patch/patch-frontend.cjs`、`patch/upgrade-patch.cjs`
 > 仍保留在源仓库供参考，日常安装请使用 `install-all.cjs`。
 

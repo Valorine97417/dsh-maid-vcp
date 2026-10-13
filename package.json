@@ -1,6 +1,6 @@
 {
   "name": "dsh-raw-html",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "description": "VCP 视觉通感协议规范插件：消息 HTML 渲染开关 + vcp-fast 缓存/增量加速渲染引擎 + 内置 7 款开源精选字体 + 设计规范注入（任何电脑/agent 即插即用）",
   "keywords": [
     "deepseek",
@@ -15,6 +15,12 @@
   "private": true,
   "type": "module",
   "main": "lib/index.js",
+  "scripts": {
+    "install-patch": "node patch/install-all.cjs",
+    "install-patch:dry": "node patch/install-all.cjs --dry-run",
+    "test": "node tests/bundle.test.mjs && node tests/boost-fontface.test.cjs",
+    "test:dom": "node tests/smoke.test.mjs && node tests/stable.test.mjs && node tests/trusted.test.mjs && node tests/security.test.mjs"
+  },
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
@@ -65,6 +71,10 @@
   "license": "MIT",
   "optionalDependencies": {
     "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0",
+    "puppeteer": "^22.0.0"
   },
   "repository": {
     "type": "git",

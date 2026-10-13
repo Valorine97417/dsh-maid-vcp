@@ -2,10 +2,11 @@
  * 小手拖拽平移 e2e：放大复杂图 → 模拟鼠标拖拽 → 验证 scrollLeft/scrollTop 变化。
  * 运行：node tests/e2e-mermaid-pan.cjs
  */
-const puppeteer = require('G:/AI/AI 助手/VCPChat-main/node_modules/puppeteer')
+const puppeteer = require('./_deps.cjs').puppeteer()
 const fs = require('fs')
 
-const MERMAID_SRC = 'G:/AI/H3MINI/dsh-raw-html/assets/vendor/mermaid.min.js'
+const path = require('path')
+const MERMAID_SRC = path.join(__dirname, '..', 'assets', 'vendor', 'mermaid.min.js')
 
 async function main() {
   const mermaidSrc = fs.readFileSync(MERMAID_SRC, 'utf8')

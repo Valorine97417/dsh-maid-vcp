@@ -6,7 +6,7 @@
  *  3. 页面 VCP 消息卡的根容器/子元素 computed font-family
  * 运行：node tests/diag-fonts.cjs
  */
-const puppeteer = require('G:/AI/AI 助手/VCPChat-main/node_modules/puppeteer')
+const puppeteer = require('./_deps.cjs').puppeteer()
 const fs = require('fs')
 
 const EDGE_CANDIDATES = [

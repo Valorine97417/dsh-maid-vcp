@@ -23,7 +23,7 @@
 | 黑体·细 | `Lanxi-HeiTiLight` | Lanxi-HeiTiLight.woff2 | 1.3MB |
 | 黑体·粗 | `Lanxi-HeiTiBold` | Lanxi-HeiTiBold.woff2 | 1.4MB |
 | 英文花体 | `Lanxi-GreatVibes` | Lanxi-GreatVibes.woff2 | 44KB |
-| 宋体·正文（warm-minimal） | `Lanxi-可宋` | Lanxi-可宋.woff2 | 2.79MB |
+| 宋体·正文 | `Lanxi-可宋` | Lanxi-可宋.woff2 | 2.79MB |
 | 宋体·标题 | `Lanxi-朗宋` | Lanxi-朗宋.woff2 | 2.05MB |
 | 宋体·副题 | `Lanxi-品宋` | Lanxi-品宋.woff2 | 2.53MB |
 | 宋体·颜韵 | `Lanxi-颜宋` | Lanxi-颜宋.woff2 | 2.37MB |
