@@ -2,6 +2,14 @@
 
 本文件记录插件版本（`package.json` 的 `version`）与补丁代号（`patch/*` 注入模块）两条线的演进。
 
+## 0.6.4（本地化：接管停更上游 + link 依赖）
+
+- **本地化（先生 · 2026-10-13 · 原话「raw插件创作者已经停更了，你帮我弄成本地的。然后上传到我的github里。依赖什么的都加上，避免github下载安装又要重新修复。」）**：上游 `plolpl789/dsh-raw-html` 已停更，本仓库 `Valorine97417/dsh-raw-html` 接管维护，含上游没有的本地修复（美学面板 0 风格、hover 白底白字、可信模式默认开启 + 徽章隐藏、风格库精简为 abyss-maid）。
+- **依赖改 `link:` 协议**：profile 的 `package.json` 从 `github:plolpl789/dsh-raw-html`（每次 `pnpm install` 重新拉 tarball → 本地改动整包回滚）改为 `link:D:/DeepSeek Harness/Works/dsh-raw-html`。`link:` 让 pnpm 只在 `node_modules` 建符号链接指向源目录，**install 时只重建链接、永不复制或覆盖源目录内容**，本地修复从此免疫任何 install。`pnpm-lock.yaml` 同步对齐（删掉远程 tarball resolution 与 integrity 段，改写为 `link:` 记录）。
+- **依赖声明补齐**：`peerDependencies`（`@deepseek-ai/cordis ^4.0.1`、`react ^18.3.1`）与 `optionalDependencies`（`@deepseek-ai/schemastery ^3.18.1`）已在位；`package.json` 补 `repository` / `homepage` / `bugs` 三字段指向新仓库，避免其他用户照旧文档装回停更上游。
+- **README 安装章节同步**：安装说明从 `file:` 改为 `link:`，并说明「为什么是 `link:` 而不是 `file:`」（`file:` 目录依赖会在 install 时把源目录内容拷进 `node_modules`，改动被复制品遮蔽）。
+- **部署形态**：`node_modules/dsh-raw-html` 为指向源仓库的 junction，改一处两边同步；RPC 自测 10 断言全绿，风格库解析正常（1 个风格 abyss-maid）。
+
 ## 0.6.3（补丁 v7.3 · 可信模式默认开启 + 徽章隐藏）
 
 - **可信模式默认开启（先生 · 2026-10-13 · 原话「这个可信模式，设置为默认开启。然后隐藏掉。这样换另一台安装就不会当聊天背景面板按钮了。」）**：`lib/client.js` 的 `isTrusted()` 语义由「显式 `'1'` 才开」反转为「**缺省即信任，仅显式 `'0'` 才关**」——`__DSH_TRUSTED__===false` 或 `localStorage['raw-html.trusted']==='0'` 判 false，localStorage 不可用的异常场景回落安全默认（false）。换机安装开箱即信任，无需手动点徽章。

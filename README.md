@@ -23,17 +23,24 @@
 > | 可信模式默认开启 + 徽章隐藏 | `lib/client.js` | `isTrusted()` 缺省即信任（仅显式 `'0'` 才关）；盾锁徽章默认不挂载，避免与 `dsh-video-skin` 悬浮钮 `#dsvs-knobs-pill` 撞位 |
 > | 风格库精简 | `styles/` | 只保留 `abyss-maid`（深海蕾丝 · 女仆工坊风），其余 12 个风格已归档 |
 >
-> **安装（推荐本地目录依赖，避免 `pnpm install` 从远程 tarball 整包覆盖本地改动）**：
+> **安装（用 `link:` 本地目录依赖，杜绝 `pnpm install` 整包覆盖本地改动）**：
 >
 > ```bash
-> pnpm add "file:D:/DeepSeek Harness/Works/dsh-raw-html"
+> pnpm add "link:D:/DeepSeek Harness/Works/dsh-raw-html"
 > ```
 >
 > 或在 profile 的 `package.json` 里直接写：
 >
 > ```json
-> "dsh-raw-html": "file:D:/DeepSeek Harness/Works/dsh-raw-html"
+> "dsh-raw-html": "link:D:/DeepSeek Harness/Works/dsh-raw-html"
 > ```
+>
+> **为什么是 `link:` 而不是 `file:`**：`link:` 让 pnpm 只在 `node_modules` 建一个指向源目录的符号链接，
+> `pnpm install` 时只重建链接、**永不复制或覆盖源目录内容**——本仓库的本地修复因此免疫任何 install。
+> （`file:` 目录依赖会在 install 时把源目录内容拷进 `node_modules`，改动被复制品遮蔽；
+> 而 `github:` / `git+https:` 远程依赖每次 install 都重新拉 tarball，正是本次「整包回滚」事故的成因。）
+>
+> 改完记得清掉 lockfile 里的远程残留：`pnpm install --lockfile-only` 会把它对齐成 `link:` 记录。
 
 ## ✨ 效果展示（Gallery）
 
