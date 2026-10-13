@@ -153,6 +153,23 @@ The "cache + incremental" dual engine (`window.__vcpFast`) layered on the v1 ren
 - Use `margin` for visual grouping, not blank lines;
 - After writing, check: the card HTML string must contain zero occurrences of `\n\n`.
 
+## ⚠️ Common pitfall: one message = one format (HTML or Markdown)
+
+**If a single message contains both a raw HTML card and Markdown, the Markdown part is rendered as plain source text.**
+
+Symptom (measured 2026-10-13): the card renders fine, but a Markdown table after it collapses into bare pipes and `**bold**` shows its asterisks — **the Markdown pipeline never ran, this is not a render failure**.
+
+Two causes:
+1. **Renderer**: `fixVcpBlank` uses `(<div id="vcp-root"[^>]*>)([\s\S]*)$` to collapse blank lines inside the card — that regex has **no right boundary** and consumes everything up to the end of the message, including the blank line separating the card from the following Markdown. Once that separator is gone, the trailing Markdown is absorbed into the HTML block.
+2. **Host**: a Markdown HTML block never parses Markdown syntax inside itself.
+
+**Rules**:
+- One message is **either all HTML** (a `<div id="vcp-root">` card, with prose written inside using `<div>`/`<p>`/`<span>`);
+- **or all Markdown** (plain prose, tables, lists);
+- **never both**. When you need "card + explanation", put the explanation inside the card.
+
+> Authoritative source: [DESIGN.md §4](./DESIGN.md) rule 12; this section is an operational quick reference only.
+
 ## Config
 
 - **Built-in fonts** (recommended): 7 open-source fonts shipped with the plugin (all OFL-licensed), zero config.

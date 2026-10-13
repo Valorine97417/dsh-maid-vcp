@@ -2,6 +2,12 @@
 
 本文件记录插件版本（`package.json` 的 `version`）与补丁代号（`patch/*` 注入模块）两条线的演进。
 
+## 0.6.6（文档 · 一条消息只允许一种格式）
+
+- **新增铁律：禁 HTML / Markdown 混排（先生 · 2026-10-13 实测）**。`DESIGN.md §4` 新增第 12 条「一条消息只允许一种格式（HTML 或 Markdown，不可混排）」。根因两层：① 渲染层 `fixVcpBlank` 的第二段正则 `(<div id="vcp-root"[^>]*>)([\s\S]*)$` **无右边界**，从卡片开标签一路吃到消息末尾，连带把「卡片 → 分界空行 → Markdown」的分界空行一并压掉，卡片后的 Markdown 被并进 HTML 块；② 宿主侧 Markdown 的 HTML 块内部本就不解析 Markdown 语法。**症状**：卡片正常渲染，卡片后的 Markdown 表格成一排裸竖线、`**加粗**` 显示成星号——不是渲染失败，是根本没走 Markdown 解析（先生实测截图确认）。**规则**：一条消息要么全 HTML（说明文字用 `<div>`/`<p>`/`<span>` 写进卡内），要么全 Markdown，绝不混排。
+- **README 双端同步**：`README.md` 新增「常见坑：一条消息只允许一种格式」运维速查节（与既有「vcp-root 内部禁止空行」并列，均挂指针指向 DESIGN.md §4 权威源）；文档地图的「铁律定位」行补入本条；`README.en.md` 补对应英文节。
+- **版本章节对齐**：`README.md` 版本章节的「当前 0.6.4」已落后于 `package.json`（0.6.5），随本次更新对齐为 0.6.6。
+
 ## 0.6.5（补丁 v10 · 代际自适应 + 仓库工程化）
 
 - **补丁器·桌面端 v10 代际自适应（核心）**：新增 `patch/patch-frontend-asar.cjs` + `patch/asar-io.cjs`——直接在 `app.asar` 内原地替换前端 bundle。**不再写死压缩后的变量名锚点**，改为先扫描 bundle 推导符号表（jsx 运行时 / React / style parse / vc / hp / memo），再按探测结果生成锚点：前端升级换了变量名（jsx `f→l`、React `R→j`、`vc(n,r)→vc(e,n)` 等）也能自动适配；探测不到的增强能力跳过并告警、基础渲染照常安装（旧脚本锚点一失效就全盘中止）。能力集：A `case"html"` 三态化 / B+C 代际 shim + v6 注入 / E `case"code"` 围栏兜底 / F markdown 空行修复。asar 读写全用纯 Node 实现（16 字节头 + JSON 目录树 + 紧排数据区），自动重算每一条 integrity、原地 `ftruncate` + 反向分块回写规避 `EBUSY`，失败自动回滚。

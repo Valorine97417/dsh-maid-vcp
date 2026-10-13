@@ -69,7 +69,7 @@
 
 ## 版本
 
-- **插件版本**：`package.json` 的 `version`（当前 **0.6.4**），随 `dsh plugin` 升级。
+- **插件版本**：`package.json` 的 `version`（当前 **0.6.6**），随 `dsh plugin` 升级。
 - **补丁代号**：`patch/` 注入模块的演进代号，由安装器应用到前端 bundle，二者独立演进：
   - **桌面端（Electron）**：**v10 · 代际自适应**（`patch/patch-frontend-asar.cjs`）——直接在 `app.asar` 内原地替换 bundle，自动重算 integrity、原地回写规避 `EBUSY`。**先扫描 bundle 推导压缩后符号表再生成锚点**，前端升级换了变量名（jsx `f→l`、React `R→j`、`vc(n,r)→vc(e,n)` 等）也能自动适配，探测不到的增强能力跳过并告警、基础渲染照常安装。
   - **Web 端 / 独立 bundle**：**v6 · 子版本 v6.38**（`patch/install-v6.cjs`），前端兼容 **0.0.1-rc.5 ~ 0.1.0-rc.7** 与 **0.1.0-rc.8 / 0.1.1-rc.x** 两代压缩形态（vc/hp 与 Xu/jd 自动探测适配）。
@@ -107,7 +107,7 @@
 | `PROGRESS.md` | 会话交接快照（进度 / 血泪教训 / 路线图） | 维护者 |
 | `CHANGELOG.md` | 变更流水（插件版本 + 补丁代号） | 维护者 |
 
-**铁律定位**：`vcp-root 禁止空行` 权威在 DESIGN.md §4；交互 / 安全白名单权威在 VCP-INTERACTIONS.md。新增规则先判断归属，只写进权威源，别处挂指针。
+**铁律定位**：`vcp-root 禁止空行` 与 `一条消息只允许一种格式（禁 HTML/Markdown 混排）` 权威在 DESIGN.md §4；交互 / 安全白名单权威在 VCP-INTERACTIONS.md。新增规则先判断归属，只写进权威源，别处挂指针。
 
 ## 安装（任意 DSH 环境 · 人 & agent 通用）
 
@@ -170,6 +170,23 @@ node "...\patch\install-all.cjs" "C:\...\dsh-web-frontend\dist\assets\index-*.js
 - 写完检查：卡片 HTML 字符串中 `\n\n` 出现次数必须为 0。
 
 > 此铁律的唯一权威源见 [DESIGN.md §4](./DESIGN.md) 安全铁律（含根因与完整修正），本节仅作运维速查。
+
+## ⚠️ 常见坑：一条消息只允许一种格式（HTML 或 Markdown）
+
+**同一条消息里既写裸 HTML 卡片、又写 Markdown，Markdown 那部分会整段变成源码文本。**
+
+症状（2026-10-13 实测）：卡片正常渲染，但卡片后的 Markdown 表格成了一排裸竖线、`**加粗**` 显示成星号——**不是渲染失败，是根本没走 Markdown 解析**。
+
+根因两层：
+1. **渲染层**：`fixVcpBlank` 清理卡片内空行时用的正则 `(<div id="vcp-root"[^>]*>)([\s\S]*)$` **没有右边界**，会从卡片开标签一路吃到消息末尾，把「卡片 → 空行 → Markdown」的分界空行也一并压掉。分界空行消失后，卡片后的内容被并进 HTML 块。
+2. **宿主**：Markdown 的 HTML 块内部本就不解析 Markdown 语法。
+
+**规则**：
+- 一条消息**要么全 HTML**（`<div id="vcp-root">` 卡片，说明文字用 `<div>`/`<p>`/`<span>` 写在卡内）；
+- **要么全 Markdown**（普通正文、表格、列表）；
+- **绝不混排**。需要「卡片 + 说明」时，说明写进卡片内部，不要在卡片后接 Markdown。
+
+> 此规则的唯一权威源见 [DESIGN.md §4](./DESIGN.md) 安全铁律第 12 条，本节仅作运维速查。
 
 ## 配置
 
