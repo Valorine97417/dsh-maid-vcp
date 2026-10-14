@@ -153,24 +153,17 @@ The "cache + incremental" dual engine (`window.__vcpFast`) layered on the v1 ren
 - Use `margin` for visual grouping, not blank lines;
 - After writing, check: the card HTML string must contain zero occurrences of `\n\n`.
 
-## ⚠️ Common pitfall: one message = one format (HTML or Markdown)
+## ✅ Mixed formats unlocked (renderer self-heals since patch v6.39 · verified live 2026-10-14)
 
-**If a single message contains both a raw HTML card and Markdown, the Markdown part is rendered as plain source text.**
+**Verdict**: "card + blank line + Markdown table/bold/list" in one message now renders correctly — the old "one message = one format" lockdown is **lifted**.
 
-Symptom (measured 2026-10-13): the card renders fine, but a Markdown table after it collapses into bare pipes and `**bold**` shows its asterisks — **the Markdown pipeline never ran, this is not a render failure**.
+Historical symptom (measured 2026-10-13, which motivated the rule): the card rendered, but trailing Markdown collapsed into bare pipes and literal `**bold**` asterisks. Two causes: ① `fixVcpBlank`'s old regex `(<div id="vcp-root"[^>]*>)([\s\S]*)$` had **no right boundary** and swallowed the blank line separating the card from trailing Markdown; ② the host never parses Markdown inside an HTML block.
 
-Two causes:
-1. **Renderer**: `fixVcpBlank` uses `(<div id="vcp-root"[^>]*>)([\s\S]*)$` to collapse blank lines inside the card — that regex has **no right boundary** and consumes everything up to the end of the message, including the blank line separating the card from the following Markdown. Once that separator is gone, the trailing Markdown is absorbed into the HTML block.
-2. **Host**: a Markdown HTML block never parses Markdown syntax inside itself.
+v6.39 self-heal: `findRootClose` locates the root container's closing tag, collapses blank lines only *inside* it, and restores the separator blank line after it. Seven cases green; mixed-format rendering verified live 2026-10-14.
 
-> **Since patch v6.39 the renderer self-heals** (2026-10-13): `fixVcpBlank` now locates the root container's closing tag first and collapses blank lines only *inside* the container; when the closing tag is followed by a single newline plus content, it restores the blank line — so trailing Markdown lands in its own block and parses normally. Seven cases verified green. **The model-side rule still stands**: this is a safety net, not a licence — compliant output is cheaper and avoids one reflow on the streaming frame where the card closes.
+**Current guidance (recommendation, not a rule)**: prose inside the card (`<div>`/`<p>`/`<span>`) is still the most robust — during streaming, unclosed intermediate frames fall back to the old behaviour and reflow once when the card closes; if you do mix formats, keep the separator blank line.
 
-**Rules**:
-- One message is **either all HTML** (a `<div id="vcp-root">` card, with prose written inside using `<div>`/`<p>`/`<span>`);
-- **or all Markdown** (plain prose, tables, lists);
-- **never both**. When you need "card + explanation", put the explanation inside the card.
-
-> Authoritative source: [DESIGN.md §4](./DESIGN.md) rule 12; this section is an operational quick reference only.
+> Authoritative source: [DESIGN.md §4](./DESIGN.md) rule 12 (current wording); this section is an operational quick reference only.
 
 ## Config
 
