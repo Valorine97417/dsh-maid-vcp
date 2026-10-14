@@ -528,6 +528,21 @@
   // 防御：把「其后没有闭合标签」的 <style>/<script> 开标签转义为文本——
   // 文字里的伪标签字样（反引号示例等）不应被 DOMParser 当真标签吞掉后续内容；
   // 完整闭合的标签（真样式块）不受影响。
+  // ---- HTML 注释剥离（v6.40 · 先生 2026-10-15 实测：`<!--tts:…-->` 显形）----
+  // 注释节点经 DOMParser 变成 comment，再交给 vdom 转换时被转成**带尖括号的文本**
+  // 渲染出来——而注释是给工具读的（TTS 朗读摘要、渲染层指令），正文里一个字符
+  // 都不该出现。所以在这里就剥掉，让注释根本进不了 vdom。
+  // 未闭合的注释按 HTML 规范吞到文档末尾（DOMParser 同此行为），这里显式截断，
+  // 免得流式中间帧把半截注释文字闪出来。
+  // 注意：`<pre><code>` 里的注释示例已在 protectCodeEntities 转义成 &lt;!--，不受影响。
+  var HTML_COMMENT_RE = /<!--[\s\S]*?-->/g
+  function stripHtmlComments(html) {
+    if (html.indexOf('<!--') === -1) return html
+    var out = html.replace(HTML_COMMENT_RE, '')
+    var open = out.indexOf('<!--')
+    return open === -1 ? out : out.slice(0, open)
+  }
+
   function escapeUnclosedRawtext(html, isTail) {
     return html.replace(/<(style|script)(\s[^>]*)?>/gi, function (m, name) {
       var after = html.slice(html.indexOf(m) + m.length).toLowerCase()
@@ -603,6 +618,7 @@
 
   function parseFrag(html, isTail) {
     if (!html) return null
+    html = stripHtmlComments(html)
     html = escapeUnclosedRawtext(html, isTail)
     html = extractTrustedScripts(html)
     if (isTail) {
