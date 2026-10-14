@@ -69,10 +69,10 @@
 
 ## 版本
 
-- **插件版本**：`package.json` 的 `version`（当前 **0.6.10**），随 `dsh plugin` 升级。
+- **插件版本**：`package.json` 的 `version`（当前 **0.6.12**），随 `dsh plugin` 升级。
 - **补丁代号**：`patch/` 注入模块的演进代号，由安装器应用到前端 bundle，二者独立演进：
   - **桌面端（Electron）**：**v10.2 · 追加式写入**（`patch/patch-frontend-asar.cjs`）——直接在 `app.asar` 内原地替换 bundle，自动重算 integrity、原地回写规避 `EBUSY`。**先扫描 bundle 推导压缩后符号表再生成锚点**，前端升级换了变量名（jsx `f→l`、React `R→j`、`vc(n,r)→vc(e,n)` 等）也能自动适配，探测不到的增强能力跳过并告警、基础渲染照常安装。**已是 v10 形态时不再短路跳过**：用模块自身的 `START`/`END` 标记夹取旧模块整段替换为磁盘最新版（`v6-inject.js` 改了 bug 之后重跑 install-all 即生效，不用手动改 asar）。v10.2 起替换条目走**追加式**（新内容写数据区末尾 + 头部保长补空格），运行中的 DSH 不会因偏移平移错位崩溃，重启后生效；开跑前 `tasklist` 探测 DSH 运行状态并提示。
-  - **Web 端 / 独立 bundle**：**v6 · 子版本 v6.40**（`patch/install-v6.cjs`），前端兼容 **0.0.1-rc.5 ~ 0.1.0-rc.7** 与 **0.1.0-rc.8 / 0.1.1-rc.x** 两代压缩形态（vc/hp 与 Xu/jd 自动探测适配）。
+  - **Web 端 / 独立 bundle**：**v6 · 子版本 v6.41**（`patch/install-v6.cjs`），前端兼容 **0.0.1-rc.5 ~ 0.1.0-rc.7** 与 **0.1.0-rc.8 / 0.1.1-rc.x** 两代压缩形态（vc/hp 与 Xu/jd 自动探测适配）。
 - 详细变更见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 组成
@@ -207,13 +207,17 @@ v6.39 自愈：`findRootClose` 定位根容器闭合点、空行压缩只在容�
 
 > 权威源见 [DESIGN.md §4](./DESIGN.md) 第 11 条，本节仅作运维速查。
 
-## ⚠️ 常见坑：HTML 注释会显形（补丁 v6.40 修复 · 2026-10-15 实测）
+## ⚠️ 常见坑：HTML 注释会显形（补丁 v6.41 修复 · 2026-10-15 实测，v6.40 那次位置挂错了）
 
 **症状**：卡片底下明晃晃挂着一行 `<!--tts:老大，……-->`，尖括号都在。
 
 **根因**：注释节点经 `DOMParser` 变成 comment，再交给 vdom 转换时被转成**带尖括号的文本**渲染出来。注释本来是给工具读的（TTS 朗读摘要、渲染层指令），不该出现在正文里。
 
-**修复（v6.40）**：`patch/v6-inject.js` 的 `parseFrag` 进 DOM 之前先 `stripHtmlComments()` 整块剥掉；未闭合的按 HTML 规范截断到末尾（护住流式中间帧，免得半截注释文字闪出来）。`<pre><code>` 里的注释示例已在 `protectCodeEntities` 转义成 `&lt;!--`，不受影响。
+**为什么 v6.40 没用**：那一版把 `stripHtmlComments()` 挂在 `parseFrag`。可 `<!--tts:…-->` 前后有空行时，CommonMark 把它切成**独立的 HTML 注释块**单独交给 `render`——处理链走完已是空串，`if (!v) return null` **在 `parseFrag` 之前就短路**，剥注释轮不到；返 `null` → 宿主回退原文 → 照样显形。
+
+**修复（v6.41）**：钩子提到 `render` **入口**，进处理链之前就 `stripHtmlComments()`；并且**剥完为空时返回空 Fragment 而非 `null`**——`null` 是「我不渲染」（宿主会退回原文），空 Fragment 是「渲染成空」（注释就此消失）。真空消息与「有内容却被清空」仍返 `null`，不吞内容。`parseFrag` 里那层保留，管注释跟着卡片一起进来的场景。未闭合注释截断到末尾（护住流式中间帧）。`<pre><code>` 里的注释示例已在 `protectCodeEntities` 转义成 `&lt;!--`，不受影响。
+
+**铁律**：**钩子挂点必须挂在调用链入口，不是下游**——同一天在两处栽了同一个坑（TTS 标记挂 `applyTtsPlaybackScope` 被上游清洗吃掉、注释剥离挂 `parseFrag` 被 `render` 开头的空值检查短路）。钩子返回值也有语义：`null` 是「没有」，空结构是「有但是空」。
 
 **配套**：TTS 侧剥注释只是让它**不被念**，显不显形归渲染层管——`dsh-maid-tts-fix` 的 `<!--tts:…-->` 标记要**两个补丁都打**才完整（只打 TTS 侧 → 不念但显形；只打渲染侧 → 不显形但照旧念全文）。
 

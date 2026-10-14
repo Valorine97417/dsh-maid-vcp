@@ -1139,11 +1139,24 @@
   }
   function render(raw, streaming) {
     var t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : 0
-    var v = sanitizeStyle(constrainImg(imgConvert(scopeVcp(raw || ''))))
+    // v6.41 注释剥离提到最上游（先生 2026-10-15 二次实测：v6.40 仍显形）：
+    // v6.40 把 stripHtmlComments 放在 parseFrag 里，只覆盖「注释跟着卡片一起进来」。
+    // 但 `<!--tts:…-->` 前后有空行时，CommonMark 把它切成**独立的 HTML 注释块**，
+    // 单独交给 render——处理链走完 v 为空串，`if (!v) return null` 先短路，
+    // 剥注释根本轮不到；render 返回 null → 宿主回退显示原文 → 尖括号注释照样显形。
+    // 现在两步一起改：① 进处理链之前就剥；② 剥完为空时返回**空 Fragment 而非 null**
+    // （null 是「我不渲染」，宿主会退回原文；空 Fragment 是「渲染成空」，注释就此消失）。
+    var src = stripHtmlComments(raw || '')
+    var v = sanitizeStyle(constrainImg(imgConvert(scopeVcp(src))))
     if (streaming) v = mathPlaceholder(v, true)
     v = mermaidBlockConvert(v)
     v = protectCodeEntities(v)
-    if (!v) return null
+    if (!v || v.trim() === '') {
+      // 剥完注释后整块没内容了：原文有东西（只是注释/空白）→ 渲染成空，注释就此消失；
+      // 原文本来就是空的 → 维持旧行为返回 null，不改变空消息的既有路径。
+      if (src.trim() === '' && (raw || '').trim() !== '') return f.jsx(f.Fragment, { children: [] })
+      return null
+    }
     if (!streaming) {
       // 非流式（流式结束后的最终帧 / 历史消息）：直接完整渲染，
       // 清空状态机，避免流式期间残留的残缺状态被复用导致泄漏。

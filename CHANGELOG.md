@@ -2,6 +2,17 @@
 
 本文件记录插件版本（`package.json` 的 `version`）与补丁代号（`patch/*` 注入模块）两条线的演进。
 
+## 0.6.12（补丁 v6.41 · 注释剥离提到最上游）
+
+- **背景**：先生 2026-10-15 二次实测——v6.40 装上后注释**仍然显形**。这说明「挂在 `parseFrag`」这个位置选错了。
+- **根因（v6.40 为什么没用）**：`<!--tts:…-->` 前后有空行时，CommonMark 把它切成**独立的 HTML 注释块**单独交给 `render`。此时处理链（`scopeVcp` → `mathPlaceholder` → `mermaidBlockConvert` → `protectCodeEntities`）走完 `v` 已是空串，`if (!v) return null` **在 parseFrag 之前就短路了**，剥注释根本轮不到；`render` 返回 `null` → 宿主 `return n.value` 回退显示原文 → 尖括号注释照样显形。
+- **修复（`patch/v6-inject.js` 的 `render` 入口）**：两步一起改。
+  1. **剥注释提到处理链最上游**——`var src = stripHtmlComments(raw || '')`，注释在处理链之前就没了；
+  2. **剥完为空时返回空 Fragment 而非 null**——`null` 的语义是「我不渲染」，宿主会退回原文；空 Fragment 的语义是「渲染成空」，注释就此消失。判据是 `src.trim() === '' && (raw||'').trim() !== ''`：只有「原文有东西、剥完没东西」才返空 Fragment，真空消息与「有内容但被处理链清空」仍返回 `null`（不吞内容、不改变既有路径）。
+  `parseFrag` 里的 `stripHtmlComments` **保留**——它管的是「注释跟着卡片一起进来」的场景，两层互补。
+- **验证**：新探针 `_probe/vcp-comment-v641-probe.mjs` 从 `v6-inject.js` 里正则抠出**真实的** `stripHtmlComments` 与 `render`（不抄源码），用桩依赖在 vm 里跑 **9 用例全绿**：只有注释→空 Fragment / 注释带换行→空 Fragment / 注释+卡片→不返空 / 真空文本→仍 null / 纯空白→仍 null / 有内容却被清空→仍 null / 未闭合注释→截断 / 转义示例不受影响 / 多条注释全剥净。`node --check` 通过；asar 写入后回读 sha256 一致，原条目备份至 `Works/_asar-backup/bundle-index-5SrrfWpU.js.2026-10-14T17-53-44-369Z`。
+- **元教训（写进 lesson）**：**钩子挂点必须挂在调用链的入口，不是下游。** 同一天在两处栽了同一个坑——TTS 朗读标记挂在 `applyTtsPlaybackScope`（被上游 `prepareTtsText` 清洗吃掉）、注释剥离挂在 `parseFrag`（被 `render` 开头的空值检查短路）。第二条判据：**钩子返回值有语义**——`null` 是「没有」，空结构是「有但是空」，别把两者混为一谈。
+
 ## 0.6.11（补丁 v6.40 · HTML 注释不再显形）
 
 - **背景**：先生 2026-10-15 实测——回复正文里那行 `<!--tts:老大，补丁活着，四项全过。-->` 被**原样显示**出来，尖括号都在（该注释是 `dsh-maid-tts-fix` 的朗读摘要标记，本不该出现在正文里）。
