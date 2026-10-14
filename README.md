@@ -69,7 +69,7 @@
 
 ## 版本
 
-- **插件版本**：`package.json` 的 `version`（当前 **0.6.9**），随 `dsh plugin` 升级。
+- **插件版本**：`package.json` 的 `version`（当前 **0.6.10**），随 `dsh plugin` 升级。
 - **补丁代号**：`patch/` 注入模块的演进代号，由安装器应用到前端 bundle，二者独立演进：
   - **桌面端（Electron）**：**v10.2 · 追加式写入**（`patch/patch-frontend-asar.cjs`）——直接在 `app.asar` 内原地替换 bundle，自动重算 integrity、原地回写规避 `EBUSY`。**先扫描 bundle 推导压缩后符号表再生成锚点**，前端升级换了变量名（jsx `f→l`、React `R→j`、`vc(n,r)→vc(e,n)` 等）也能自动适配，探测不到的增强能力跳过并告警、基础渲染照常安装。**已是 v10 形态时不再短路跳过**：用模块自身的 `START`/`END` 标记夹取旧模块整段替换为磁盘最新版（`v6-inject.js` 改了 bug 之后重跑 install-all 即生效，不用手动改 asar）。v10.2 起替换条目走**追加式**（新内容写数据区末尾 + 头部保长补空格），运行中的 DSH 不会因偏移平移错位崩溃，重启后生效；开跑前 `tasklist` 探测 DSH 运行状态并提示。
   - **Web 端 / 独立 bundle**：**v6 · 子版本 v6.39**（`patch/install-v6.cjs`），前端兼容 **0.0.1-rc.5 ~ 0.1.0-rc.7** 与 **0.1.0-rc.8 / 0.1.1-rc.x** 两代压缩形态（vc/hp 与 Xu/jd 自动探测适配）。
@@ -182,6 +182,30 @@ v6.39 自愈：`findRootClose` 定位根容器闭合点、空行压缩只在容�
 **现行建议（非铁律）**：说明文字优先写进卡内（`<div>`/`<p>`/`<span>`）最稳——流式中间帧容器未闭合时仍有一次重排；确需混排就保留分界空行。
 
 > 权威源见 [DESIGN.md §4](./DESIGN.md) 第 12 条，本节仅作运维速查。
+
+## ⚠️ 常见坑：卡片图片必须走同源相对路径（2026-10-14 实测）
+
+**症状**：卡片结构、文字、样式全正常，但**每张图只剩一个碎图图标 + alt 文字**。
+
+**根因**：渲染层 `allowSrc` 白名单放行 `https?:` / `data:image/` / `/` / `#`——所以外链**不会被剥**；但桌面端 GUI 页面跑在自定义协议 `dsh-app://app/` 下、**完全禁网**，外链资源一律静默失败（不报 CSP，只是取不到）。
+
+**两条死路**：
+- `file:///D:/...` 本地绝对路径 → 被 `allowSrc` 直接剥掉 `src`；
+- `http(s)://` 外链（如 `http://127.0.0.1:8188/view?filename=X&type=output`）→ 白名单放行但壳内取不到。
+
+`data:image` base64 虽放行，但几张 1024² 图就能撑爆单条输出，不可用。
+
+**正解 · 同源相对路径**：
+
+```html
+<img src="/comfyui/media?file=qwen21_edit_api_00001_.png&subfolder=&type=output" alt="…">
+```
+
+`/comfyui/media?file=<文件名>&subfolder=<子目录>&type=output|input` 由 **dsh-maid-comfyui** 提供（`proxy.ts` 流式转发 ComfyUI `/view`，带 `accept-ranges`/206），是同源路由里唯一能吐图片字节的出口；实测 6 张 1024² PNG 全 200、1.3–2.0 MB、`image/png`。本插件自身**没有**图片托管路由（只注册 `/fonts` 与 `/vendor`，MIME 白名单都不含图片扩展名）。
+
+**排查套路**：先用 `node:http` 裸探 `127.0.0.1:19387` 上同一路由确认字节可达（根路径 `/` 返回 401 是认证墙，插件路由不需要认证，别被误导），再改卡片路径——两边一致才能排除服务端问题。
+
+> 权威源见 [DESIGN.md §4](./DESIGN.md) 第 11 条，本节仅作运维速查。
 
 ## 配置
 

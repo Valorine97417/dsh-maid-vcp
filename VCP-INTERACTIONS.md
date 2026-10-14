@@ -9,6 +9,7 @@
 2. **唯一 JS 通道**：`onclick="input('...')"` 由渲染层桥接为真实发送（先生点按钮 → 输入框填入并发送）。
 3. **流式注意**：流式输出过程中元素会被反复重建，**交互状态（展开/选中）可能重置**；交互请在流结束后使用。卡片结构（元素类型/文本/样式）在流式中稳定。
 4. **安全边界**：script/iframe/object/embed 会被过滤；href/src 仅放行 http/https/mailto/data:image/相对路径；style 中 `position:fixed`、`z-index>=1000`、`content:` 会被剥离。
+5. **白名单放行 ≠ 能加载**：桌面端 GUI 跑在 `dsh-app://` 壳协议下**完全禁网**——`http(s)://` 外链虽过白名单，壳内一律静默失败（不报 CSP，只是取不到）。图片/资源一律用**同源相对路径**（如图片走 dsh-maid-comfyui 的 `/comfyui/media?file=X&type=output`）；`file://` 会被直接剥掉 `src`。详见 [DESIGN.md §4](./DESIGN.md) 第 11 条。
 
 ---
 

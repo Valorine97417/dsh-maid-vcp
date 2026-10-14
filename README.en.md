@@ -68,7 +68,7 @@ and the agent outputs following a **maintainable design system**.
 
 ## Versioning
 
-- **Plugin version**: the `version` in `package.json` (currently **0.6.5**), upgraded via `dsh plugin`.
+- **Plugin version**: the `version` in `package.json` (currently **0.6.10**), upgraded via `dsh plugin`.
 - **Patch codename**: the evolution codename of the `patch/` injected modules, applied to the frontend bundle by the installer. The two evolve independently:
   - **Desktop (Electron)**: **v10 · generation-adaptive** (`patch/patch-frontend-asar.cjs`) — replaces the bundle in place inside `app.asar`, recomputes integrity, and writes back in place to dodge `EBUSY`. It **scans the bundle to derive the minified symbol table before generating anchors**, so a frontend upgrade that renames variables (jsx `f→l`, React `R→j`, `vc(n,r)→vc(e,n)`, …) is adapted automatically; enhancements it cannot detect are skipped with a warning while base rendering still installs.
   - **Web / standalone bundle**: **v6 · sub-version v6.38** (`patch/install-v6.cjs`), compatible with **0.0.1-rc.5 ~ 0.1.0-rc.7** and **0.1.0-rc.8 / 0.1.1-rc.x** (the `vc`/`hp` and `Xu`/`jd` minified shapes are auto-detected).
@@ -164,6 +164,30 @@ v6.39 self-heal: `findRootClose` locates the root container's closing tag, colla
 **Current guidance (recommendation, not a rule)**: prose inside the card (`<div>`/`<p>`/`<span>`) is still the most robust — during streaming, unclosed intermediate frames fall back to the old behaviour and reflow once when the card closes; if you do mix formats, keep the separator blank line.
 
 > Authoritative source: [DESIGN.md §4](./DESIGN.md) rule 12 (current wording); this section is an operational quick reference only.
+
+## ⚠️ Common pitfall: card images must use a same-origin relative path (measured 2026-10-14)
+
+**Symptom**: the card's structure, text and styling all render fine, but **every image shows only a broken-image icon plus its alt text**.
+
+**Cause**: the renderer's `allowSrc` whitelist allows `https?:` / `data:image/` / `/` / `#` — so an external URL is **not** stripped. But the desktop GUI page runs under the custom scheme `dsh-app://app/`, which is **fully offline**: external resources fail silently (no CSP violation is reported, they simply never load).
+
+**Two dead ends**:
+- `file:///D:/...` — stripped outright by `allowSrc`;
+- `http(s)://` external URLs (e.g. `http://127.0.0.1:8188/view?filename=X&type=output`) — allowed by the whitelist but unreachable inside the shell.
+
+`data:image` base64 is allowed, but a few 1024² images blow up the single message budget.
+
+**Correct approach — same-origin relative path**:
+
+```html
+<img src="/comfyui/media?file=qwen21_edit_api_00001_.png&subfolder=&type=output" alt="…">
+```
+
+`/comfyui/media?file=<name>&subfolder=<dir>&type=output|input` is provided by **dsh-maid-comfyui** (`proxy.ts` streams ComfyUI `/view`, with `accept-ranges`/206) and is the only same-origin route that serves image bytes. Measured: six 1024² PNGs, all 200, 1.3–2.0 MB, `image/png`. This plugin itself has **no** image-hosting route (it only registers `/fonts` and `/vendor`, whose MIME whitelists exclude image extensions).
+
+**Debugging routine**: probe the same route on `127.0.0.1:19387` with `node:http` to confirm the bytes are reachable (root `/` returns 401 as an auth wall — plugin routes need no auth, so don't be misled), then fix the card path. Only when both sides agree can you rule out a server-side problem.
+
+> Authoritative source: [DESIGN.md §4](./DESIGN.md) rule 11; this section is an operational quick reference only.
 
 ## Config
 
