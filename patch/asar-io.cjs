@@ -17,7 +17,10 @@
  *   - 每个条目带 integrity（sha256 + blockSize + blocks），改内容后必须
  *     重算 hash 与 blocks，否则 Electron 校验不过。
  *   - 正在运行的 Electron 会**把 asar 头缓存到内存**，磁盘改了也要重启才生效；
- *     且 jsonLen 变化会让 HTTP 层按旧偏移取字节 → 前端读到错位的 JS → 白屏。
+ *     且 jsonLen 变化会让整个数据区平移 → 运行中的进程按旧偏移取字节 → 错位 JS
+ *     → 白屏/幽灵 SyntaxError（v6.39 崩溃实证）。replaceEntry 已改为**头部保长**
+ *     （JSON 尾部补空格维持原 jsonLen，dataStart 不动）；装不下的极端情况直接
+ *     报错，让调用方在退出状态下重建。
  *   - 直接 rename 覆盖会 EBUSY（文件被进程持有）→ 必须原地 ftruncate + 分块回写。
  */
 'use strict'
@@ -86,9 +89,57 @@ function readEntry(asar, entryPath) {
 
 /**
  * 替换某条目内容，返回**整个新 asar 的 Buffer**（不落盘）。
- * 会重建数据区、平移后续 offset、重算 integrity。
+ * 采用「追加式」：新内容写到数据区末尾，只改目标条目的 offset/size/integrity，
+ * 其余条目一律不动——旧内容原地留洞（Electron 按 header 的 offset/size 读，不要求紧排）。
+ * 配合头部保长（JSON 补空格维持原 jsonLen → dataStart 不变），运行中的进程缓存的
+ * 旧头对**其他所有文件**依然指哪打哪，不会因平移错位而崩；只有被替换的条目本身
+ * 要重启后才读到新内容。若新 header JSON 长到装不进旧 jsonLen，直接抛错不写。
  */
-function replaceEntry(asar, entryPath, newBuf) {
+function replaceEntry(asar, entryPath, newBuf, opts = {}) {
+  const all = listPacked(asar.header)
+  const idx = all.findIndex((x) => x.path === entryPath)
+  if (idx < 0) throw new Error('asar 内未找到条目：' + entryPath)
+  const T = all[idx]
+
+  const newData = Buffer.concat([asar.data, newBuf])
+  T.node.offset = typeof T.node.offset === 'string' ? String(asar.data.length) : asar.data.length
+  T.node.size = newBuf.length
+  if (T.node.integrity) {
+    const bs = T.node.integrity.blockSize || DEFAULT_BLOCK_SIZE
+    T.node.integrity.hash = sha256(newBuf)
+    const blocks = []
+    for (let o = 0; o < newBuf.length; o += bs) {
+      blocks.push(sha256(newBuf.subarray(o, Math.min(o + bs, newBuf.length))))
+    }
+    T.node.integrity.blocks = blocks
+  }
+
+  let json = Buffer.from(JSON.stringify(asar.header), 'utf8')
+  if (json.length > asar.jsonLen && opts.compactIntegrity) {
+    // 瘦身兜底：被替换条目的旧数据已成洞、blocks 数组无用，丢弃换头部空间
+    if (T.node.integrity) delete T.node.integrity.blocks
+    json = Buffer.from(JSON.stringify(asar.header), 'utf8')
+  }
+  if (json.length > asar.jsonLen) {
+    throw new Error('header JSON（' + json.length + ' 字节）超出原 jsonLen（' + asar.jsonLen + '），无法保长写入')
+  }
+  // 头部保长：尾部补空格（0x20，asar 标准 padding 字节，JSON.parse 会忽略）
+  const jsonField = Buffer.alloc(asar.jsonLen, 0x20)
+  json.copy(jsonField, 0)
+  const hb = Buffer.alloc(HEADER_SIZE)
+  hb.writeUInt32LE(4, 0)
+  hb.writeUInt32LE(jsonField.length + 8, 4)
+  hb.writeUInt32LE(jsonField.length + 4, 8)
+  hb.writeUInt32LE(jsonField.length, 12)
+  return Buffer.concat([hb, jsonField, newData])
+}
+
+/**
+ * 整段重建替换（兜底路径）：新内容原位替换、后续 offset 整体平移、头部按实际长度写。
+ * ⚠ 会让 dataStart/偏移全变——**只允许在 DSH 完全退出时调用**（调用方负责进程守卫），
+ * 运行中的进程持旧头读新文件必然错位（v6.39 崩溃实证）。
+ */
+function rebuildEntry(asar, entryPath, newBuf) {
   const all = listPacked(asar.header)
   const idx = all.findIndex((x) => x.path === entryPath)
   if (idx < 0) throw new Error('asar 内未找到条目：' + entryPath)
@@ -168,5 +219,6 @@ module.exports = {
   findEntry,
   readEntry,
   replaceEntry,
+  rebuildEntry,
   writeInPlace,
 }

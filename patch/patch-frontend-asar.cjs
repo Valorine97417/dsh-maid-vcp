@@ -435,6 +435,15 @@ function main() {
   log('模式：app.asar')
   log('目标：' + asarPath)
 
+  // 进程探测：补丁常在运行中的 DSH 里执行——v10.1 起 replaceEntry 为追加式+头部保长，
+  // 运行中的进程不会因偏移平移而错位崩溃，但新内容必须重启后才生效。这里只提示不拦截。
+  try {
+    const tl = execFileSync('tasklist', ['/FI', 'IMAGENAME eq DeepSeek Harness.exe', '/NH'], { encoding: 'utf8', windowsHide: true })
+    if (/DeepSeek Harness\.exe/i.test(tl)) {
+      warn('检测到 DSH 正在运行：本次写入采用追加式（不会打崩当前进程），但补丁需完全退出并重启后生效。')
+    }
+  } catch { /* 探测失败不拦路 */ }
+
   const asar = asarIO.readAsar(asarPath)
   log('asar 大小 ' + asar.total + '，条目 ' + asarIO.listPacked(asar.header).length + ' 个')
 
@@ -461,7 +470,7 @@ function main() {
 
   if (dryRun) { log('--dry-run：不写入'); return }
 
-  // 备份（整份 asar 太大就只备份条目）
+  // 备份（整份 asar 太大就只备份条目）：<安装根>\Works\_asar-backup
   const bakDir = path.join(path.dirname(asarPath), '..', 'Works', '_asar-backup')
   try {
     fs.mkdirSync(bakDir, { recursive: true })
@@ -475,7 +484,28 @@ function main() {
 
   const newBuf = Buffer.from(r.text, 'utf8')
   log('重建 asar…')
-  const whole = asarIO.replaceEntry(asar, entry, newBuf)
+  let whole
+  try {
+    whole = asarIO.replaceEntry(asar, entry, newBuf, { compactIntegrity: true })
+    log('追加式写入（头部保长，运行中的进程不受影响）')
+  } catch (e) {
+    // 保长失败（header 超出旧 jsonLen）→ 只在 DSH 未运行时退回整段重建
+    let running = false
+    try {
+      const tl = execFileSync('tasklist', ['/FI', 'IMAGENAME eq DeepSeek Harness.exe', '/NH'], { encoding: 'utf8', windowsHide: true })
+      running = /DeepSeek Harness\.exe/i.test(tl)
+    } catch { /* 探测失败按未运行处理前先复核 */ }
+    if (running) {
+      console.error('[v10] ✗ ' + e.message)
+      console.error('[v10]   且检测到 DSH 正在运行——整段重建会打崩运行中的进程，已中止，未写入。')
+      console.error('[v10]   请完全退出 DSH 后重试。')
+      process.exit(1)
+    }
+    warn('保长失败（' + e.message + '），DSH 未运行 → 退回整段重建（平移 offset）')
+    // replaceEntry 失败前已把 header 改脏，重读一份干净的再重建
+    const asar2 = asarIO.readAsar(asarPath)
+    whole = asarIO.rebuildEntry(asar2, entry, newBuf)
+  }
   log('新 asar 大小 ' + whole.length + '（' + (whole.length - asar.total >= 0 ? '+' : '') + (whole.length - asar.total) + '）')
 
   log('原地写回（规避 EBUSY）…')

@@ -2,6 +2,13 @@
 
 本文件记录插件版本（`package.json` 的 `version`）与补丁代号（`patch/*` 注入模块）两条线的演进。
 
+## 0.6.8（补丁 v10.2 · 追加式写入，根治热替换崩溃）
+
+- **根因**：v10.1 及以前，`replaceEntry` 重建数据区时把目标条目之后**所有 offset 整体平移**、头部按实际 JSON 长度写——`jsonLen` 一变 `dataStart` 就移动，运行中的 Electron 持启动时缓存的旧头按旧偏移取字节，读到错位乱码，报「幽灵 SyntaxError」（10-14 实证：`Unexpected token 'else'` 连崩 4 次、`Cannot use 'import.meta' outside a module` 两次，盘上代码其实全部合法）。
+- **修复（`patch/asar-io.cjs`）**：`replaceEntry` 改为**追加式**——新内容写到数据区末尾，只改目标条目自己的 offset/size/integrity，其余 11470 个条目纹丝不动；头部**保长**（JSON 尾部补 `0x20` 空格维持原 `jsonLen` → `dataStart` 不变）。极端情况（新 header 超出旧 jsonLen）先尝试丢弃被替换条目的冗余 `integrity.blocks` 瘦身，仍超则抛错。旧「整段重建」逻辑原样保留为 `rebuildEntry` 导出兜底。
+- **守卫（`patch/patch-frontend-asar.cjs`）**：asar 模式开跑前用 `tasklist` 探测 DSH 是否在运行——在跑则提示「追加式写入不会打崩当前进程，重启后生效」；保长失败需退回 `rebuildEntry` 时**强制要求 DSH 已退出**，否则中止不写。
+- **验证**：真 asar 副本端到端实测 11 项全 PASS——jsonLen 保长（3392083→3392083）、dataStart 不变、除目标外全部条目 offset/size 不动、目标条目迁移至数据区末尾、读回 bundle `node --check` 通过且含 `__vcpStable`、抽样条目与 `preload-app.cjs` 字节级不变、回读 sha256 一致；`--dry-run` 对真 asar 正确输出运行中提示。
+
 ## 0.6.7（补丁 v6.39 · 混排自愈 + 模块可升级）
 
 - **混排自愈（补丁 v6.39 · 先生 · 2026-10-13 · 原话「不进入记忆，更新进raw里。」）**：`patch/v6-inject.js` 的 `fixVcpBlank` 不再「一刀切压到消息尾」，改为**先定位根容器闭合点、空行压缩只在容器内部生效**。新增 `function findRootClose(text, from, rootName)`：复用已有的 `nextTag` 分词（`open`/`close`/`self`/`comment`/`decl`/`unknown`/`incomplete`）做深度计数，`script`/`style` 按 `RAWTEXT` 跳过其内容（含 `>` 的选择器不再干扰）、`VOID_TAGS` 不入栈；闭标签在栈中找不到即判定「未闭合」，**退回旧行为**（流式中间帧照旧压到消息尾，终帧自愈）。容器闭合处若紧跟「单换行 + 非空内容」自动补成空行，让卡后的 Markdown 回到独立块、重新走 md 解析。**效果**：一条消息里「卡片 + 空行 + Markdown」的写法从「表格成裸竖线、`**加粗**` 成星号」恢复为正常渲染；纯 Markdown 消息、整条只有卡片、前言补空行（v6.37 修复）三种既有行为均不受影响。七用例实测全绿（A 无卡原样 / B 卡内压缩 / C 卡后恢复空行 / D 单换行自动补 / E 前言补空行 / F 流式未闭合退回 / G 卡内 style 含 `>` 仍能定位）。
