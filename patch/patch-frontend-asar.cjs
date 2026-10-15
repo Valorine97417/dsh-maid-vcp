@@ -229,7 +229,81 @@ function buildCodeCase(s) {
   const V = s.htmlValue
   const streamArg = s.ctx ? `!!(${s.ctx}&&${s.ctx}.streaming)` : 'false'
   const call = `${s.codeFn}(${s.codeArgs.join(',')})`
-  return String.raw`case"code":{try{var _cv=(${V}.value||"").trim();if(typeof localStorage!=="undefined"&&localStorage.getItem("dsh.rawHtml")!=="0"&&/^<div\s+id=["']vcp-root["']/i.test(_cv)){var _cr=window.__vcpStable&&window.__vcpStable.render(${V}.value,${streamArg});if(_cr!==null&&_cr!==undefined)return _cr}}catch(_ce){if(typeof console!=="undefined")console.warn("[vcp] code 围栏渲染异常，已回退代码块",_ce)}return ${call}}`
+  // v10.3：判据从「**以** <div id="vcp-root" 开头」放宽成「**含**」——原来那条 ^ 锚定
+  // 只要围栏前面多一行说明（或一行 tts 朗读标记）就整卡失效、退回代码块显示源码。
+  return String.raw`case"code":{try{var _cv=(${V}.value||"").trim();if(typeof localStorage!=="undefined"&&localStorage.getItem("dsh.rawHtml")!=="0"&&/<div\s+id=["']vcp-root["']/i.test(_cv)){var _cr=window.__vcpStable&&window.__vcpStable.render(${V}.value,${streamArg});if(_cr!==null&&_cr!==undefined)return _cr}}catch(_ce){if(typeof console!=="undefined")console.warn("[vcp] code 围栏渲染异常，已回退代码块",_ce)}return ${call}}`
+}
+
+/**
+ * G. case"inlineCode" 注释兜底（v10.3 · 2026-10-16）。
+ *
+ * 事故：朗读标记被写成 **Markdown 行内代码**（反引号包裹 `<!--tts:…-->`）时，
+ * CommonMark 把它交给 case"inlineCode" 分支渲染成 <code> —— 而注释剥离只挂在
+ * 走 render() 的 case"html" / case"code" 两条分支上，inlineCode 没接补丁，
+ * 于是尖括号注释原样显形（先生两次截图报障）。
+ *
+ * 修法：在 inlineCode 分支入口加一道**极窄**的守卫——只有「原文以 <!-- 开头，
+ * 且把完整注释剥掉之后什么都不剩（或剩下的仍以 <!-- 开头，即残缺标记）」时才
+ * 拦截，交给 render 剥成空 Fragment；普通行内代码一个字节都不碰。
+ */
+function buildInlineCodeGuard(tokenVar, ctxVar) {
+  const streamArg = ctxVar ? `!!(${ctxVar}&&${ctxVar}.streaming)` : 'false'
+  return String.raw`try{var _iv=${tokenVar}.value||"";if(typeof localStorage!=="undefined"&&localStorage.getItem("dsh.rawHtml")!=="0"&&/^\s*<!--/.test(_iv)){var _is=_iv.replace(/<!--[\s\S]*?-->/g,"");if(_is.trim()===""||/^\s*<!--/.test(_is)){var _ir=window.__vcpStable&&window.__vcpStable.render(_iv,${streamArg});if(_ir!==null&&_ir!==undefined)return _ir}}}catch(_ie){if(typeof console!=="undefined")console.warn("[vcp] inlineCode 注释兜底异常，已回退行内代码",_ie)}`
+}
+
+/** 渲染上下文变量名：优先用符号表探测结果，其次从**已打补丁**的分支里反推 */
+function resolveCtxVar(t, sym) {
+  if (sym && sym.ctx && t.includes(sym.ctx + '.streaming')) return sym.ctx
+  const m = /\.value,!!\(([A-Za-z_$][\w$]*)&&\1\.streaming\)/.exec(t)
+  if (m && t.includes(m[1] + '.streaming')) return m[1]
+  for (const c of ['o', 'i', 'l', 'r']) {
+    if (new RegExp(`\\b${c}\\.streaming\\b`).test(t)) return c
+  }
+  return null
+}
+
+/**
+ * G 项的独立安装函数——设计成**可重复调用、可不依赖符号表**：
+ * 主流程（首次安装）与「已是 v10 形态」的升级路径都要调它。原因见文件头
+ * 「v10.1 模块整段升级」注释：A/E/F 三项锚点补丁在 v10 形态下无法二次定位，
+ * 而 inlineCode 分支没被前几项动过，锚点仍在，所以 G 项可以随时补装。
+ * 顺带把 E 项的旧判据（带 ^ 锚定）就地放宽。
+ */
+function patchInlineCode(t, ctxVar) {
+  const applied = []
+  const skipped = []
+
+  // E′ 旧判据放宽（已装机上的老形态）
+  const codeOldRe = '&&/^<div\\s+id=["\']vcp-root["\']/i.test(_cv)'
+  const codeNewRe = '&&/<div\\s+id=["\']vcp-root["\']/i.test(_cv)'
+  if (t.includes(codeOldRe)) {
+    if (t.split(codeOldRe).length - 1 === 1) {
+      t = t.replace(codeOldRe, codeNewRe)
+      applied.push('E′ case"code" 判据放宽（去 ^ 锚定）')
+    } else {
+      skipped.push('E′ case"code" 判据出现多份，跳过放宽')
+    }
+  }
+
+  // G 本体
+  if (/case"inlineCode":\{try\{var _iv=/.test(t)) {
+    skipped.push('G case"inlineCode" 已含注释兜底')
+    return { text: t, applied, skipped, changed: applied.length > 0 }
+  }
+  const m = /case"inlineCode":\{const ([A-Za-z_$][\w$]*)=([A-Za-z_$][\w$]*)\.value\.replace\(/.exec(t)
+  if (!m) {
+    skipped.push('G case"inlineCode" 形态未知，跳过（不影响基础渲染）')
+    return { text: t, applied, skipped, changed: applied.length > 0 }
+  }
+  const before = `case"inlineCode":{const ${m[1]}=`
+  if (t.split(before).length - 1 !== 1) {
+    skipped.push('G case"inlineCode" 锚点不唯一，跳过')
+    return { text: t, applied, skipped, changed: applied.length > 0 }
+  }
+  const guard = buildInlineCodeGuard(m[2], ctxVar)
+  t = t.replace(before, `case"inlineCode":{${guard}const ${m[1]}=`)
+  applied.push('G case"inlineCode" 注释兜底')
+  return { text: t, applied, skipped, changed: true }
 }
 
 function buildMemoAfter(m) {
@@ -286,8 +360,21 @@ function patchBundle(text) {
 
   if (t.includes(V6_MARK) && t.includes('window.__vcpGen')) {
     const up = updateInjectModule(t)
-    if (up) return up
-    return { text: t, applied: ['已是 v10 形态，无需重复安装（未找到模块标记）'], skipped, changed: false }
+    const base = up || { text: t, applied: ['已是 v10 形态，无需重复安装（未找到模块标记）'], skipped: [], changed: false }
+    // v10.3：v10 形态下 A/E/F 锚点无法二次定位，但 case"inlineCode" 分支没被前几项动过，
+    // G 项（含 E′ 判据放宽）随时可补装——所以升级路径不能直接 return。
+    const g = patchInlineCode(base.text, resolveCtxVar(base.text, null))
+    if (g.changed) {
+      return {
+        text: g.text,
+        applied: base.applied.concat(g.applied),
+        skipped: base.skipped.concat(g.skipped),
+        changed: true,
+        upgradeOnly: true,
+      }
+    }
+    if (g.skipped.length) base.skipped = base.skipped.concat(g.skipped)
+    return base
   }
 
   const s = detectSymbols(t)
@@ -344,6 +431,14 @@ function patchBundle(text) {
     skipped.push('F markdown 组件锚点未探测到，跳过（不影响基础渲染）')
   }
 
+  // G. case"inlineCode" 注释兜底（增强 · v10.3）
+  {
+    const g = patchInlineCode(t, s.ctx || resolveCtxVar(t, s))
+    t = g.text
+    for (const a of g.applied) applied.push(a)
+    for (const a of g.skipped) skipped.push(a)
+  }
+
   // B + C. 代际 shim + v6 稳定区模块
   const adapted = adaptInject(INJECT_SRC, true)
   replaceOnce(s.injectAnchor, buildGenShim(s) + adapted + '\n' + s.injectAnchor, 'B+C shim + v6 注入')
@@ -359,6 +454,8 @@ function healthCheck(bundleText, result, tmpDir) {
     [bundleText.includes('__DSH_V6_INJECT_START__'), 'v6-inject 起始标记'],
     [bundleText.includes('__DSH_V6_INJECT_END__'), 'v6-inject 结束标记'],
     [bundleText.includes('window.__dshInput'), 'onclick 交互桥'],
+    [bundleText.includes('case"inlineCode":{try{var _iv='), 'G inlineCode 注释兜底已注入'],
+    [!bundleText.includes("/^<div\\s+id=[\"']vcp-root"), 'E case"code" 判据已放宽（无 ^ 锚定）'],
     [!/case"html":return [A-Za-z_$][\w$]*\.value;/.test(bundleText), '原始 case"html" 已消失'],
   ]
   // 关键：memo 替换后两个 useRef 声明必须仍在（v8 白屏事故就是这么来的）
