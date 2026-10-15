@@ -58,6 +58,19 @@
  *     （null 是「我不渲染」，宿主会退回原文；空 Fragment 是「渲染成空」，注释消失）。
  *     铁律：钩子挂点必须在调用链**入口**，不是下游——同一天在 TTS 侧栽了同款坑。
  *
+ * v6.42 未闭合注释不再吞正文（先生 2026-10-15 报障：连着两次回复正文整段不见，
+ *     界面只剩「已完成，用时 N 秒」）：v6.41 对未闭合 `<!--` 的处理是**无条件**
+ *     截断到末尾（本意护流式中间帧），而朗读标记写残时（结尾只剩 `--`、或写成
+ *     `了。>`）那刀就从标记处一路切到消息末尾——正文与卡片一起被剥光，render 再
+ *     走「原文有东西、剥完没东西」返回空 Fragment，界面空白。
+ *     修法：stripHtmlComments 加 lenient 参数，render 入口传 true —— 宽容模式下
+ *     遇到未闭合 `<!--` 只吃掉**它所在的整行**（含行尾换行，标记协议上独占一行，
+ *     删整行才不会把两侧正文粘成一行）再继续扫；行尾没换行时仍吃到末尾。老调用点
+ *     （lenient !== true，流式中间帧）保留原截断行为不变。
+ *     配套：TTS 侧 extractTtsSpokenOverride 放宽认行尾 `--`（dsh-maid-tts-fix 0.6.3），
+ *     两道保险各管一头——渲染侧保正文不消失，TTS 侧保写残也念得对。
+ *     教训：**「防流式」的宽容逻辑不能无条件套在最终帧上**，语境要显式传进来。
+ *
  * 版本说明：v6.19~v6.32 的逐级迭代已归纳为本版本（详见 git 提交历史）。
  *
  * 本文件无 import/export，直接以文本形式注入到 bundle 的 vc()/Xu() 定义之前：
@@ -541,15 +554,30 @@
   // 注释节点经 DOMParser 变成 comment，再交给 vdom 转换时被转成**带尖括号的文本**
   // 渲染出来——而注释是给工具读的（TTS 朗读摘要、渲染层指令），正文里一个字符
   // 都不该出现。所以在这里就剥掉，让注释根本进不了 vdom。
-  // 未闭合的注释按 HTML 规范吞到文档末尾（DOMParser 同此行为），这里显式截断，
-  // 免得流式中间帧把半截注释文字闪出来。
+  // 未闭合的注释按 HTML 规范吞到文档末尾（DOMParser 同此行为），流式中间帧里显式
+  // 截断，免得半截注释文字闪出来。
+  // v6.42 未闭合注释在**最终帧**不再吞正文（先生 2026-10-15 三次实测：整条回复空白）：
+  // 标记写成 `<!--tts:…--`（少一个 `>`）时，HTML_COMMENT_RE 匹配不到，旧的
+  // `out.slice(0, open)` 就把标记**之后的整条正文**切掉了——回复只剩工具行。
+  // 残缺标记是永久的、不会自愈，所以最终帧改走「宽容剥法」：未闭合注释只剥到
+  // **本行行尾**（标记约定独占一行），后面的正文原样保住；流式帧仍截断
+  // （中间帧会重来，不怕闪）。正文里误写未闭合 `<!--` 同理被救回。
   // 注意：`<pre><code>` 里的注释示例已在 protectCodeEntities 转义成 &lt;!--，不受影响。
   var HTML_COMMENT_RE = /<!--[\s\S]*?-->/g
-  function stripHtmlComments(html) {
+  function stripHtmlComments(html, lenient) {
     if (html.indexOf('<!--') === -1) return html
     var out = html.replace(HTML_COMMENT_RE, '')
     var open = out.indexOf('<!--')
-    return open === -1 ? out : out.slice(0, open)
+    while (open !== -1) {
+      if (lenient !== true) return out.slice(0, open)
+      // 吃掉整个未闭合标记所在的这一行（含行尾换行）——标记协议上独占一行，
+      // 删整行才不会把它两侧的正文粘成一行。
+      var eol = out.indexOf('\n', open)
+      var end = eol === -1 ? out.length : eol + 1
+      out = out.slice(0, open) + out.slice(end)
+      open = out.indexOf('<!--')
+    }
+    return out
   }
 
   function escapeUnclosedRawtext(html, isTail) {
@@ -625,9 +653,9 @@
     return out
   }
 
-  function parseFrag(html, isTail) {
+  function parseFrag(html, isTail, lenient) {
     if (!html) return null
-    html = stripHtmlComments(html)
+    html = stripHtmlComments(html, lenient === true)
     html = escapeUnclosedRawtext(html, isTail)
     html = extractTrustedScripts(html)
     if (isTail) {
@@ -1018,7 +1046,8 @@
 
   function fullRender(v, streaming) {
     resetF()
-    var R = parseFrag(v)
+    // v6.42：最终帧传 lenient=true —— 残缺注释（`<!--tts:…--`）只剥本行，不吞正文。
+    var R = parseFrag(v, streaming, !streaming)
     if (R) {
       injectRootChrome(R)
       attachMathRef(R, streaming)
@@ -1155,7 +1184,8 @@
     // 剥注释根本轮不到；render 返回 null → 宿主回退显示原文 → 尖括号注释照样显形。
     // 现在两步一起改：① 进处理链之前就剥；② 剥完为空时返回**空 Fragment 而非 null**
     // （null 是「我不渲染」，宿主会退回原文；空 Fragment 是「渲染成空」，注释就此消失）。
-    var src = stripHtmlComments(raw || '')
+    // v6.42：最终帧走宽容剥法（未闭合注释只剥本行），流式帧仍截断——见 stripHtmlComments。
+    var src = stripHtmlComments(raw || '', !streaming)
     var v = sanitizeStyle(constrainImg(imgConvert(scopeVcp(src))))
     if (streaming) v = mathPlaceholder(v, true)
     v = mermaidBlockConvert(v)
