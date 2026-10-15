@@ -260,7 +260,13 @@ function updateInjectModule(t) {
   if (j === -1) return null
   const endIdx = j + END.length
   const oldMod = t.slice(i, endIdx)
-  const newMod = adaptInject(INJECT_SRC, true)
+  // v10.2 · 2026-10-15：INJECT_SRC 是整文件，尾部那个换行不属于模块本体。带上它
+  // 比较会让 oldMod 永远 != newMod，于是每次 install 都在 END 后多插一个换行——
+  // 非幂等（bundle 每次 +1 字符，dry-run 永远报「整段升级」）。按模块本体切出来比。
+  const full = adaptInject(INJECT_SRC, true)
+  const ni = full.indexOf(START)
+  const nj = ni === -1 ? -1 : full.indexOf(END, ni)
+  const newMod = ni === -1 || nj === -1 ? full : full.slice(ni, nj + END.length)
   if (oldMod === newMod) {
     return { text: t, applied: ['已是 v10 形态，v6 模块已是最新，无需重复安装'], skipped: [], changed: false }
   }
