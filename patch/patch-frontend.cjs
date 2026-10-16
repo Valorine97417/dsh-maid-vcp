@@ -96,8 +96,14 @@ let t = fs.readFileSync(file, 'utf8')
 // ---- 锚点 A：case"html" 分支（当前 bundle v4 状态）------------------------
 const CASE_HTML_BEFORE = String.raw`case"html":return function(){if(typeof localStorage!=="undefined"&&localStorage.getItem("dsh.rawHtml")==="1"){try{const v=(n.value||"").replace(/!\[([^\]]*)\]\(([^)]+)\)/g,function(m,a,u){u=u.trim();if(!/^(https?:|data:image\/|\/)/i.test(u))return m;return"<img alt=\""+((a||"").replace(/"/g,"&quot;"))+"\" src=\""+u.replace(/"/g,"&quot;")+"\">"}),w=i.streaming?v.replace(/animation:([^;"']*);?/g,function(m,x){return/infinite/.test(x)?m:""}):v,F=window.__vcpFast||(window.__vcpFast={c:new Map(),last:"",el:null,hits:0,builds:0,ms:0,lastLog:0}),t0=typeof performance!=="undefined"&&performance.now?performance.now():0;if(F.c.has(w)){F.hits++;if(t0&&performance.now()-F.lastLog>2000){F.lastLog=performance.now();console.debug("[vcp-fast] HIT size="+F.c.size+" hits="+F.hits+" builds="+F.builds)}return F.c.get(w)}let R=null;if(F.last!==""&&F.el!==null&&w.startsWith(F.last)&&(/<\/[a-zA-Z][^>]*>\s*$/.test(F.last)||/<[a-zA-Z][^>]*\/>\s*$/.test(F.last))){const tb=new DOMParser().parseFromString(w.slice(F.last.length),"text/html").body,to=[];for(let k=0;k<tb.childNodes.length;k++)to.push(vc(tb.childNodes[k],k));if(to.length===0)R=F.el;else R=f.jsx(f.Fragment,{children:[F.el,to.length===1?to[0]:f.jsx(f.Fragment,{children:to})]})}else{const b=new DOMParser().parseFromString(w,"text/html").body;if(!b.childNodes.length)return null;const o=[];for(let k=0;k<b.childNodes.length;k++)o.push(vc(b.childNodes[k],k));R=o.length===1?o[0]:f.jsx(f.Fragment,{children:o})}F.c.set(w,R);if(F.c.size>200)F.c.clear();F.last=w;F.el=R;F.builds++;if(t0){F.ms+=performance.now()-t0;if(performance.now()-F.lastLog>2000){F.lastLog=performance.now();console.debug("[vcp-fast] BUILD size="+F.c.size+" avg="+(F.ms/F.builds).toFixed(2)+"ms last="+w.length)}}return R}catch(e){}}return n.value}();`
 
-// v5：图片 URL 白名单（http/https/data:image/相对路径），其余协议不生成 img
-const CASE_HTML_AFTER = String.raw`case"html":return function(){if(typeof localStorage!=="undefined"&&localStorage.getItem("dsh.rawHtml")==="1"){try{const v=(n.value||"").replace(/!\[([^\]]*)\]\(([^)]+)\)/g,function(m,a,u){u=u.trim();if(!/^(https?:|data:image\/|\/)/i.test(u))return m;return"<img alt=\""+((a||"").replace(/"/g,"&quot;"))+"\" src=\""+u.replace(/"/g,"&quot;")+"\">"}),w=i.streaming?v.replace(/animation:([^;"']*);?/g,function(m,x){return/infinite/.test(x)?m:""}):v,F=window.__vcpFast||(window.__vcpFast={c:new Map(),last:"",el:null,hits:0,builds:0,ms:0,lastLog:0}),t0=typeof performance!=="undefined"&&performance.now?performance.now():0;if(F.c.has(w)){F.hits++;if(t0&&performance.now()-F.lastLog>2000){F.lastLog=performance.now();console.debug("[vcp-fast] HIT size="+F.c.size+" hits="+F.hits+" builds="+F.builds)}return F.c.get(w)}let R=null;if(F.last!==""&&F.el!==null&&w.startsWith(F.last)&&(/<\/[a-zA-Z][^>]*>\s*$/.test(F.last)||/<[a-zA-Z][^>]*\/>\s*$/.test(F.last))){const tb=new DOMParser().parseFromString(w.slice(F.last.length),"text/html").body,to=[];for(let k=0;k<tb.childNodes.length;k++)to.push(vc(tb.childNodes[k],k));if(to.length===0)R=F.el;else R=f.jsx(f.Fragment,{children:[F.el,to.length===1?to[0]:f.jsx(f.Fragment,{children:to})]})}else{const b=new DOMParser().parseFromString(w,"text/html").body;if(!b.childNodes.length)return null;const o=[];for(let k=0;k<b.childNodes.length;k++)o.push(vc(b.childNodes[k],k));R=o.length===1?o[0]:f.jsx(f.Fragment,{children:o})}F.c.set(w,R);if(F.c.size>200)F.c.clear();F.last=w;F.el=R;F.builds++;if(t0){F.ms+=performance.now()-t0;if(performance.now()-F.lastLog>2000){F.lastLog=performance.now();console.debug("[vcp-fast] BUILD size="+F.c.size+" avg="+(F.ms/F.builds).toFixed(2)+"ms last="+w.length)}}return R}catch(e){}}return n.value`
+// 【2026-10-17 删除 · 原 CASE_HTML_AFTER（所谓 v5 态锚点）】
+// 它其实是上面 CASE_HTML_BEFORE 的残缺副本：正文逐字节相同、唯独漏掉尾部 `}();`。
+// 危害：作为 BEFORE 的**前缀**，它会先于 BEFORE 命中任何旧态 bundle（v4/v5 都算，
+// 不止注释原先声称的 v5）；替换后原文尾部残留的 `}();` 只剩 `();`，与 V7 自带的
+// `}();` 相接，产出 **`}();();`** —— SyntaxError（实测复现见
+// Works/_probe/vcp-verify-case-html.cjs 断言 5）。旧态现统一由 CASE_HTML_BEFORE
+// （完整带尾锚点）承接；若某代际形态与 BEFORE 不符，则命中 0 次走既有 fail-loud
+// 中止（exit 1，不写盘）。
 
 // v6：稳定区固化 —— case"html" 改为调 window.__vcpStable.render（模块由锚点 C 注入）
 // 注意：BEFORE 是含尾部 `}();` 的完整分支文本，AFTER 必须同样以 `}();` 结尾（IIFE 调用收尾）
@@ -220,8 +226,12 @@ if (t.indexOf(CODE_CASE_V3) !== -1) {
   console.log('[patch] 围栏兜底升级：v6.30 纯白名单 → v6.35 三态化')
 }
 
-// ---- html 分支升级状态机（v6/v5 → v6.35）：同上三态化，消除「开关未设置 =
-// 一切裸 HTML 显示源码」的陷阱；旧版（v5 无 render 调用 / v6 === "1"）一律升级。
+// ---- html 分支升级状态机（v6 → v6.35）：三态化，消除「开关未设置 =
+// 一切裸 HTML 显示源码」的陷阱；v6 态（=== "1"）在此升级。
+// 注意：旧态（v4/v5，无 __vcpStable 调用）**不在此处理**——由下方 REPLACEMENTS 的
+// 锚点 A（CASE_HTML_BEFORE，完整带尾形态）承接。这里曾有一支 CASE_HTML_AFTER 分支，
+// 因该锚点缺尾 `}();`、是 BEFORE 的前缀而先命中，会产出 `}();();` 语法错误，已删除
+// （2026-10-17 七仓体检）。
 let htmlCaseHandled = false
 if (t.indexOf(CASE_HTML_V7_AFTER) !== -1) {
   htmlCaseHandled = true
@@ -230,10 +240,6 @@ if (t.indexOf(CASE_HTML_V7_AFTER) !== -1) {
   t = t.replace(CASE_HTML_V6_AFTER, CASE_HTML_V7_AFTER)
   htmlCaseHandled = true
   console.log('[patch] html 分支升级：v6 开关检查 → v6.35 三态化')
-} else if (t.indexOf(CASE_HTML_AFTER) !== -1) {
-  t = t.replace(CASE_HTML_AFTER, CASE_HTML_V7_AFTER)
-  htmlCaseHandled = true
-  console.log('[patch] html 分支升级：v5 → v6.35 三态化')
 }
 
 /**
