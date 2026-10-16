@@ -518,6 +518,20 @@ dsh plugin --profile web remove dsh-maid-vcp
 
 ## 暂未遇到（留白，供后续补记）
 
+### 6.7 面板图标类问题（本仓也适用，2026-10-16 记）
+
+**症状**：插件面板里某个小困插件显示默认蓝蝴蝶，而不是统一的比耶小困头像——统一换图标那次，`dsh-maid-guard` 就被漏下（老大照截图逮住）。
+
+**原因**：面板图标读各插件 `package.json` 的 `"icon"` 字段，**没声明就显示默认图标**。而漏的那只不住在仓根目录（住 `dsh-maid-patch-kit/guard/`，profile 侧走软链挂载），按「八仓目录」逐个加图标时天然不进枚举。
+
+**解法**：换图标**三步一个都不能少**——① 图标文件落进仓 `assets/plugin-icon.png`（256px PNG）；② `package.json` 加 `"icon": "assets/plugin-icon.png"`；③ **`files` 白名单必须含该路径**，否则 npm 分发时被排除、换机器掉图。枚举小困插件**一律走文件系统真值**，别按目录印象数：`find . -maxdepth 3 -name package.json -not -path "*/node_modules/*"`，对每个结果查 `icon` 字段。
+
+**验证方式**：`pnpm pack --dry-run --config.ignore-scripts=true` 的 Tarball Contents 里出现 `assets/plugin-icon.png`；**重启 DSH 后面板才刷新**——判据是「图标文件落盘时间早于进程启动时间」，实测法：`Get-Process | ? {$_.ProcessName -match 'DeepSeek Harness'} | select StartTime` 与文件 `stat` 时间比对。
+
+---
+
+## 待核
+
 - Windows 之外的平台（macOS / Linux）安装与路径差异：**暂未遇到**，本册所有路径均为 Windows 形态。
 - 插件在 Web 端（非 Electron）的实际渲染问题：**暂未遇到**（本机只用桌面端，Web 补丁器有意不随桌面端迭代）。
 - 上游 `plolpl789/dsh-raw-html` 复活后的回并流程：**暂未遇到**（上游已停更，本仓为接管维护分支）。
