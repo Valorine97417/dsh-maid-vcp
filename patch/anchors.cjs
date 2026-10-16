@@ -1,5 +1,5 @@
 /**
- * patch/anchors.cjs —— 安装器锚点 / 引擎文本单一来源（七仓体检 2026-11-06 抽取）。
+ * patch/anchors.cjs —— 安装器锚点 / 引擎文本单一来源（七仓体检 2026-10-17 抽取）。
  *
  * 背景：同一 bundle 形态锚点曾在 patch-frontend.cjs / install-v6.cjs / vcp-safe.cjs /
  * upgrade-patch.cjs / patch-frontend-asar.cjs 五处重复内嵌（各份仅分号或单条正则之差），

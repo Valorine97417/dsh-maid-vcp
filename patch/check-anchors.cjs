@@ -2,7 +2,7 @@
 /**
  * patch/check-anchors.cjs —— 安装器锚点单一来源一致性自检（挂 npm test 链）。
  *
- * 背景（七仓体检 2026-11-06）：同一批 bundle 锚点曾 patch-frontend.cjs / install-v6.cjs /
+ * 背景（七仓体检 2026-10-17）：同一批 bundle 锚点曾 patch-frontend.cjs / install-v6.cjs /
  * vcp-safe.cjs / upgrade-patch.cjs / patch-frontend-asar.cjs 五处重复内嵌，前端一改全体失配。
  * 现已抽到 patch/anchors.cjs 单一来源。本脚本持久保障：
  *   1) anchors.cjs 可加载、导出齐全且非空、style 正则积木可编译；
