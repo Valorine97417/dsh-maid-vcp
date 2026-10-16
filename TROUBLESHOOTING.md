@@ -245,7 +245,7 @@
 - **根因**：maid-atelier 一类皮肤注入带 `!important` 的全局字体/字号覆盖（特异性 **(0,2,0)**）。渲染器 boost 只给 `<style>` 里的文字声明**加 `!important`，不改选择器特异性**——裸类选择器（`.num{font-size:86px!important}`）特异性仍是 (0,1,0)，被皮肤 (0,2,0)!important 反压（`!important` 之间**比特异性**）。
 - **解法**：① 所有类选择器带 `#vcp-root` 前缀（scopeVcp 替换后 (1,1,0) 胜出）；② 关键字号/字体**直接内联在元素 `style` 上**（`parseOpen` ref 锁定 → 内联 `!important`，最高优先级，任何皮肤都压不住）；③ 极端情况用 `transform:scale(1.3~1.5)` + `transform-origin:left center` 兜底，书法细体配 `text-shadow` 增重；④ 或给元素加 `data-skin-chrome` 属性绕开皮肤。
 - **验证**：DevTools computed 面板看 `font-size` / `font-family` 是否被划掉（皮肤规则生效痕迹）；加前缀或内联后恢复正常。
-- 来源：`DESIGN.md §0.4`（皮肤覆盖对抗）；`DESIGN.md §4` 铁律 7。
+- 来源：`DESIGN.md §0.3`（皮肤覆盖对抗）；`DESIGN.md §4` 铁律 7。
 
 ### 3.3 「强调词显小」——没声明字号的 span 被皮肤吃掉
 
@@ -253,7 +253,7 @@
 - **根因**（真根因，非字面率）：皮肤的 `textRule` 同时注入 `font-size` 与 `font-family`（均 `!important`）。自己声明了字号的元素（`.t{font-size:19px}`）boost 后 (1,1,0)!important 能保住；但**没写 `font-size` 的强调词只有继承值——继承输给直接作用在元素上的皮肤规则** → 被压成皮肤字号。
 - **解法**：渲染器自愈层（v6.33d）把 `font-family` / `font-size` / `font-weight` / `font-style` / `line-height` / `letter-spacing` 按属性锁 `inherit`（仅覆盖未显式声明的属性；`color` / `text-align` 不锁——颜色是设计、对齐是布局）。**AI 侧铁律不变：关键文字属性尽量显式声明**（自己声明 → boost 保护 → 稳赢皮肤）。
 - **验证**：卡片里强调词与正文字号一致；未声明字号的 span 在皮肤下不再缩小。
-- 来源：`DESIGN.md §0.4` 实测补充（2026-08-25 晚报卡四连问）。
+- 来源：`DESIGN.md §0.3` 实测补充（2026-08-25 晚报卡四连问）。
 
 ### 3.4 右下角悬浮徽章与别的插件撞位
 
@@ -428,7 +428,7 @@
 | 字体资产 | `assets/fonts/*.woff2`（内置，25 个）；外置大库默认 `I:\字体` |
 | 第三方库 | `assets/vendor/`（`VCPColorEngine.js` / `mermaid.min.js` / `katex.min.js` / `katex*.css` / `fonts`） |
 | 美学库 | `styles/`（`_INDEX.md` 索引 / `_FONTS.md` / `_BASELINE.md` 兜底 / `abyss-maid.md` 唯一风格 / `_inbox/` 采集暂存） |
-| 成品档案 | `examples/`（`雨柬·山城酷热.html`、`情书·春水笺.html`、`今日八卦晚报.html`、`深夜女郎·顶栏装帧.html`、`warm-minimal-宋体体系定调.html`） |
+| 成品档案 | `examples/`（`雨柬·山城酷热.html`、`情书·春水笺.html`、`今日八卦晚报.html`、`深夜女郎·顶栏装帧.html`、`warm-minimal-宋体体系定案.html`） |
 | 测试 | `tests/`（`bundle` / `stable` / `security` / `trusted` / `smoke` / `math` / `mermaid` / `boost-fontface`，DOM 依赖由 `tests/_deps.cjs` 定位） |
 | 主题配置 | `cordis.patch.yml`（把插件的 client 入口插入 web 插件花名册） |
 
@@ -496,6 +496,16 @@ node patch/vcp-fast-sim.cjs  [bundle路径]
 dsh plugin --profile web remove dsh-maid-vcp
 ```
 
+### 6.7 面板图标类问题（本仓也适用，2026-10-16 记）
+
+**症状**：插件面板里某个小困插件显示默认蓝蝴蝶，而不是统一的比耶小困头像——统一换图标那次，`dsh-maid-guard` 就被漏下（老大照截图逮住）。
+
+**原因**：面板图标读各插件 `package.json` 的 `"icon"` 字段，**没声明就显示默认图标**。而漏的那只不住在仓根目录（住 `dsh-maid-patch-kit/guard/`，profile 侧走软链挂载），按「八仓目录」逐个加图标时天然不进枚举。
+
+**解法**：换图标**三步一个都不能少**——① 图标文件落进仓 `assets/plugin-icon.png`（256px PNG）；② `package.json` 加 `"icon": "assets/plugin-icon.png"`；③ **`files` 白名单必须含该路径**，否则 npm 分发时被排除、换机器掉图。枚举小困插件**一律走文件系统真值**，别按目录印象数：`find . -maxdepth 3 -name package.json -not -path "*/node_modules/*"`，对每个结果查 `icon` 字段。
+
+**验证方式**：`pnpm pack --dry-run --config.ignore-scripts=true` 的 Tarball Contents 里出现 `assets/plugin-icon.png`；**重启 DSH 后面板才刷新**——判据是「图标文件落盘时间早于进程启动时间」，实测法：`Get-Process | ? {$_.ProcessName -match 'DeepSeek Harness'} | select StartTime` 与文件 `stat` 时间比对。
+
 ---
 
 ## 七、排查手法
@@ -518,15 +528,7 @@ dsh plugin --profile web remove dsh-maid-vcp
 
 ## 暂未遇到（留白，供后续补记）
 
-### 6.7 面板图标类问题（本仓也适用，2026-10-16 记）
-
-**症状**：插件面板里某个小困插件显示默认蓝蝴蝶，而不是统一的比耶小困头像——统一换图标那次，`dsh-maid-guard` 就被漏下（老大照截图逮住）。
-
-**原因**：面板图标读各插件 `package.json` 的 `"icon"` 字段，**没声明就显示默认图标**。而漏的那只不住在仓根目录（住 `dsh-maid-patch-kit/guard/`，profile 侧走软链挂载），按「八仓目录」逐个加图标时天然不进枚举。
-
-**解法**：换图标**三步一个都不能少**——① 图标文件落进仓 `assets/plugin-icon.png`（256px PNG）；② `package.json` 加 `"icon": "assets/plugin-icon.png"`；③ **`files` 白名单必须含该路径**，否则 npm 分发时被排除、换机器掉图。枚举小困插件**一律走文件系统真值**，别按目录印象数：`find . -maxdepth 3 -name package.json -not -path "*/node_modules/*"`，对每个结果查 `icon` 字段。
-
-**验证方式**：`pnpm pack --dry-run --config.ignore-scripts=true` 的 Tarball Contents 里出现 `assets/plugin-icon.png`；**重启 DSH 后面板才刷新**——判据是「图标文件落盘时间早于进程启动时间」，实测法：`Get-Process | ? {$_.ProcessName -match 'DeepSeek Harness'} | select StartTime` 与文件 `stat` 时间比对。
+（暂无条目——遇到新问题按「症状 → 根因 → 解法 → 验证」四段式补记于此。）
 
 ---
 

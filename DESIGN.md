@@ -70,16 +70,16 @@
 | 手写·自由 | `Lanxi-自由浪漫` | `新增-2026-08-28/自由浪漫体.ttf` |
 | 手写·胶带 | `Lanxi-修正带灵感` | `新增-2026-08-28/香蕉修正带灵感体.ttf` |
 
-### 0.3 @font-face 模板（直接抄）
+### 0.2 @font-face 模板（直接抄）
 
 ```css
 @font-face{font-family:'Lanxi-WenKai';src:url('/fonts/Lanxi-WenKai.woff2');}
 #vcp-root .title{font-family:'Lanxi-WenKai','Lanxi-HeiTi',serif;}
 ```
 
-### 0.4 注意
+### 0.3 注意
 - 单帖最多 1-2 款艺术字体（woff2 子集 0.9-1.7MB，克制）；正文永远系统无衬线。
-- 内置字体源存 `tools/font-src/`，改动后重跑 `tools/subset_fonts.py`。
+- 内置字体源存 `tools/font-src/`（未随本仓分发，仅维护者本机有），改动后重跑 `tools/subset_fonts.py`。
 - **皮肤覆盖对抗（技术铁律）**：maid-atelier 皮肤会注入带 `!important` 的全局字体覆盖（特异性 (0,2,0)），强制换消息区字体。对策：`font-family` 声明**必须加 `!important`** 且选择器以 `#vcp-root` 前缀（特异性 (1,1,0) 压过）；或加 `data-skin-chrome` 属性绕开。字号同理。⚠️**实测补充（2026-08-28 · 雨柬卡历史卡字号被压）：渲染器 boost 只给 `<style>` 文字声明加 `!important`，不改选择器特异性**——裸类选择器（如 `.num{font-size:86px!important}`）特异性仍是 (0,1,0)，会被皮肤 (0,2,0)!important 反压（`!important` 之间比特异性），字号/字体静默退回皮肤默认。**所有类选择器必须带 `#vcp-root` 前缀**（scopeVcp 替换后 (1,1,0) 胜出）；关键字号/字体的终极保险是**内联在元素 style 上**（parseOpen ref 锁定 → 内联 !important，最高优先级，任何皮肤都压不住）。⚠️⚠️**实测补充（2026-08-25 · 晚报卡四连问 · 渲染器自愈 v6.33d 落网）：「强调词显小」的真根因不是字面率，是 font-size 被皮肤 textRule 压制**——皮肤的 textRule 同时注入 `font-size` 与 `font-family`（均 !important）；类规则 boost 后 (1,1,0)!important 能保住「自己声明了字号」的元素（如 `.t{font-size:19px}`），但「没写 font-size 的强调词 span」只有**继承值——继承输给直接作用在元素上的皮肤规则**，强调词被压成皮肤字号。对策（渲染器已内建，AI 无需操心）：自愈层把 font-family / font-size / font-weight / font-style / line-height / letter-spacing 按属性锁 `inherit`（仅覆盖未显式声明的属性；color/text-align 不锁——颜色是 AI 设计、对齐是布局）。AI 侧铁律不变：**关键文字属性尽量显式声明**（自己声明 → boost 保护 → 稳赢皮肤）。
 
 ---

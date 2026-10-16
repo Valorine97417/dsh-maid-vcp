@@ -28,6 +28,7 @@
  */
 'use strict'
 
+const anchors = require('./anchors.cjs')
 const fs = require('node:fs')
 const path = require('node:path')
 const vm = require('node:vm')
@@ -70,8 +71,7 @@ const OLD =
  * v2 升级文本：缓存 + 增量 + 计时日志。
  * 保持压缩风格（与 bundle 一致），用 window.__vcpFast 承载跨调用状态。
  */
-const NEW =
-  'case"html":return function(){if(!i.streaming&&typeof localStorage!=="undefined"&&localStorage.getItem("dsh.rawHtml")==="1"){try{const F=window.__vcpFast||(window.__vcpFast={c:new Map(),last:"",el:null,hits:0,builds:0,ms:0,lastLog:0}),t0=typeof performance!=="undefined"&&performance.now?performance.now():0;if(F.c.has(n.value)){F.hits++;if(t0&&performance.now()-F.lastLog>2000){F.lastLog=performance.now();console.debug("[vcp-fast] HIT size="+F.c.size+" hits="+F.hits+" builds="+F.builds)}return F.c.get(n.value)}let R=null;if(F.last!==""&&F.el!==null&&n.value.startsWith(F.last)&&(/<\\/[a-zA-Z][^>]*>\\s*$/.test(F.last)||/<[a-zA-Z][^>]*\\/>\\s*$/.test(F.last))){const tb=new DOMParser().parseFromString(n.value.slice(F.last.length),"text/html").body,to=[];for(let k=0;k<tb.childNodes.length;k++)to.push(vc(tb.childNodes[k],k));if(to.length===0)R=F.el;else R=f.jsx(f.Fragment,{children:[F.el,to.length===1?to[0]:f.jsx(f.Fragment,{children:to})]})}else{const b=new DOMParser().parseFromString(n.value,"text/html").body;if(!b.childNodes.length)return null;const o=[];for(let k=0;k<b.childNodes.length;k++)o.push(vc(b.childNodes[k],k));R=o.length===1?o[0]:f.jsx(f.Fragment,{children:o})}F.c.set(n.value,R);if(F.c.size>200)F.c.clear();F.last=n.value;F.el=R;F.builds++;if(t0){F.ms+=performance.now()-t0;if(performance.now()-F.lastLog>2000){F.lastLog=performance.now();console.debug("[vcp-fast] BUILD size="+F.c.size+" avg="+(F.ms/F.builds).toFixed(2)+"ms last="+n.value.length)}}return R}catch(e){}}return n.value}();'
+const NEW = anchors.V2_ENGINE
 
 const UPGRADE_MARK = 'window.__vcpFast'
 

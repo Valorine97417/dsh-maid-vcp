@@ -147,9 +147,22 @@ ok('子元素 onload/onmouseover 拒收', () => {
 })
 
 console.log('== 6. 安全规则两处一致性（parseOpen vs VC_V6，防漂移）==')
-// 读取两个实现，断言关键过滤正则/逻辑一致——改一处必须同步另一处
+// 读取两个实现，断言关键过滤正则/逻辑一致——改一处必须同步另一处。
+// install-v6.cjs 的 VC_V6/VC_V6_NEW 自 v6.36 起从 patch/anchors.cjs 单一来源插值
+// （${anchors.STYLE_RE_*}），源码文本不再含字面正则——对插值求值后的实际注入文本断言，
+// 与 anchors 积木天然同源，防漂移语义不变且更强。
+import { createRequire } from 'node:module'
+import vm from 'node:vm'
+const anchors = createRequire(import.meta.url)('../patch/anchors.cjs')
 const v6inject = fs.readFileSync(new URL('../patch/v6-inject.js', import.meta.url), 'utf8')
 const installer = fs.readFileSync(new URL('../patch/install-v6.cjs', import.meta.url), 'utf8')
+function evalVcTpl(name) {
+  const m = new RegExp('const\\s+' + name + '\\s*=\\s*String\\.raw`').exec(installer)
+  assert.ok(m, 'install-v6.cjs 缺少 ' + name + ' 模板定义')
+  const close = installer.indexOf('`', m.index + m[0].length)
+  return vm.runInNewContext(installer.slice(m.index + m[0].length - 11, close + 1), { anchors })
+}
+const installerResolved = evalVcTpl('VC_V6') + '\n' + evalVcTpl('VC_V6_NEW')
 const RULES = [
   ['position:fixed 剥离', 'position\\s*:\\s*fixed'],
   ['z-index 剥离', 'z-index\\s*:\\s*\\d{4,}'],
@@ -162,7 +175,7 @@ const RULES = [
 for (const [label, needle] of RULES) {
   ok(label + '（两处一致）', () => {
     assert.ok(v6inject.includes(needle), 'v6-inject.js 缺失: ' + label)
-    assert.ok(installer.includes(needle), 'install-v6.cjs 缺失: ' + label)
+    assert.ok(installerResolved.includes(needle), 'install-v6.cjs（VC_V6/VC_V6_NEW 插值求值后）缺失: ' + label)
   })
 }
 

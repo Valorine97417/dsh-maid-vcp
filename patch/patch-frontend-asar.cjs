@@ -27,6 +27,7 @@
  */
 'use strict'
 
+const anchors = require('./anchors.cjs')
 const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
@@ -134,9 +135,9 @@ function buildGenShim(s) {
     if (!_jsx || !_R) return
     function stripStyle(sv){
       return String(sv || '')
-        .replace(/position\s*:\s*fixed\s*;?/gi, '')
-        .replace(/z-index\s*:\s*\d{4,}\s*;?/gi, '')
-        .replace(/(?<![\w-])content\s*:[^;]*;?/gi, '')
+        .replace(/${anchors.STYLE_RE_FIXED}/gi, '')
+        .replace(/${anchors.STYLE_RE_ZINDEX}/gi, '')
+        .replace(/${anchors.STYLE_RE_CONTENT_WB}/gi, '')
     }
     var LOCK_RE = /^(color|font-family|font-size|font-weight|font-style|line-height|letter-spacing|text-align|text-shadow)$/
     function hp(sv){ ${styleFn} }

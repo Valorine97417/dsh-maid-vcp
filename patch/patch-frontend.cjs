@@ -40,6 +40,7 @@
  */
 'use strict'
 
+const anchors = require('./anchors.cjs')
 const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
@@ -100,14 +101,14 @@ const CASE_HTML_AFTER = String.raw`case"html":return function(){if(typeof localS
 
 // v6：稳定区固化 —— case"html" 改为调 window.__vcpStable.render（模块由锚点 C 注入）
 // 注意：BEFORE 是含尾部 `}();` 的完整分支文本，AFTER 必须同样以 `}();` 结尾（IIFE 调用收尾）
-const CASE_HTML_V6_AFTER = String.raw`case"html":return function(){if(typeof localStorage!=="undefined"&&localStorage.getItem("dsh.rawHtml")==="1"){try{var vr=window.__vcpStable&&window.__vcpStable.render(n.value,i.streaming);if(vr!==null&&vr!==undefined)return vr}catch(e){}}return n.value}();`
+const CASE_HTML_V6_AFTER = anchors.CASE_HTML_V6_LEGACY
 
 // v6.35（先生定调 2026-08-29）：html 分支开关三态化 ——
 // 原 v6 要求 dsh.rawHtml==="1" 才渲染；但该键只在用户点过「</>」按钮后才存在，
 // 新环境/清缓存后为 undefined → 一切裸 HTML（含 VCP 卡）显示源码（本次事故根因）。
 // 改为 !== "0"：undefined（从未设置）= 默认渲染（配合 v6-inject 启动自检落盘 "1"），
 // 用户经「</>」按钮显式关闭（"0"）才显示源码；并加 console.warn 诊断回退原因。
-const CASE_HTML_V7_AFTER = String.raw`case"html":return function(){if(typeof localStorage!=="undefined"&&localStorage.getItem("dsh.rawHtml")!=="0"){try{var vr=window.__vcpStable&&window.__vcpStable.render(n.value,i.streaming);if(vr!==null&&vr!==undefined)return vr}catch(e){if(typeof console!=="undefined")console.warn("[vcp] html 渲染异常，已回退源码",e)}}else if(typeof console!=="undefined")console.warn("[vcp] html 渲染已关闭（dsh.rawHtml===\"0\"，</> 按钮可重新开启）");return n.value}();`
+const CASE_HTML_V7_AFTER = anchors.CASE_HTML_V7
 
 // ---- 锚点 B：vc() 属性循环（当前 bundle 增强 v2 状态）-----------------------
 const VC_LOOP_BEFORE = String.raw`for(const c of i.attributes){if(c.name==="onclick"){const m=/^input\s*\(\s*['"]([\s\S]*?)['"]\s*\)\s*;?\s*$/.exec(c.value);if(m)s.onClick=function(){const fn=window.__dshInput;fn&&fn(m[1])};continue}if(c.name==="style"){let sv=c.value;sv=sv.replace(/position\s*:\s*fixed\s*;?/gi,"").replace(/z-index\s*:\s*\d{4,}\s*;?/gi,"").replace(/content\s*:\s*[^;"']*;?/gi,"");s.style=hp(sv);continue}if(c.name==="class"){s.className=c.value;continue}if(c.name==="href"&&!/^(https?:|mailto:|\/|#)/i.test(c.value))continue;if(c.name==="src"&&!/^(https?:|data:image\/|\/|#)/i.test(c.value))continue;s[c.name]=c.value}`
@@ -141,13 +142,13 @@ const STYLE_REF_AFTER = String.raw`s.style=hp(sv);s.ref=function(el){if(el)for(c
 // 裸 HTML 渲染），符合「HTML 即渲染」语义；判定保守，普通代码示例不受影响。
 // v6.32 修复：围栏兜底必须带渲染开关检查（localStorage['dsh.rawHtml']==='1'），
 // 否则关闭渲染插件后围栏 HTML 仍被强制渲染成卡片（先生实测发现）。
-const CODE_CASE_RAW = String.raw`case"code":return wp(n,r,i);`
-const CODE_CASE_V1 = String.raw`case"code":{try{const _v=(n.value||"").trim();if(/^<div\s+id=["']vcp-root["']/i.test(_v)){const _r=window.__vcpStable&&window.__vcpStable.render(n.value,i.streaming);if(_r!==null&&_r!==undefined)return _r}}catch(_e){}return wp(n,r,i)}`
-const CODE_CASE_V2 = String.raw`case"code":{try{const _v=(n.value||"").trim();if(typeof localStorage!=="undefined"&&localStorage.getItem("dsh.rawHtml")==="1"&&/^<div\s+id=["']vcp-root["']/i.test(_v)){const _r=window.__vcpStable&&window.__vcpStable.render(n.value,i.streaming);if(_r!==null&&_r!==undefined)return _r}}catch(_e){}return wp(n,r,i)}`
+const CODE_CASE_RAW = anchors.CODE_CASE_RAW
+const CODE_CASE_V1 = anchors.CODE_CASE_V1
+const CODE_CASE_V2 = anchors.CODE_CASE_V2
 // v6.35（先生定调 2026-08-29）：围栏兜底三态化 —— 原 v6.32 带 === "1" 开关检查，
 // 开关未设置（undefined）时围栏包 VCP 卡也显示源码（本次事故形态）。改为 !== "0"：
 // 白名单（vcp-root 开头）仍保留防误伤普通代码块，显式关闭（"0"）才不接管。
-const CODE_CASE_V3 = String.raw`case"code":{try{const _v=(n.value||"").trim();if(typeof localStorage!=="undefined"&&localStorage.getItem("dsh.rawHtml")!=="0"&&/^<div\s+id=["']vcp-root["']/i.test(_v)){const _r=window.__vcpStable&&window.__vcpStable.render(n.value,i.streaming);if(_r!==null&&_r!==undefined)return _r}}catch(_e){if(typeof console!=="undefined")console.warn("[vcp] code 围栏渲染异常，已回退代码块",_e)}return wp(n,r,i)}`
+const CODE_CASE_V3 = anchors.CODE_CASE_V3
 
 // ---- 锚点 F：bc（markdown 组件）解析前做卡片空行修复（v6.37 · 先生 2026-08-29）----
 // CommonMark type 6 规则：<div> 等块级标签【不能打断段落】——消息以
@@ -163,7 +164,7 @@ const BC_AFTER = String.raw`const bc=R.memo(function({text:r,streaming:i=!1,code
 // ---- 锚点 C：vc() 定义前注入 v6 稳定区模块 ----
 // 模块源码来自同目录 v6-inject.js（无 import/export，依赖闭包 vc/hp/f 与全局 window/DOMParser）。
 // BEFORE 用「hp 函数结束 + vc 函数开始」的拼接锚点，保证唯一且幂等（注入后不再命中）。
-const VC_DEF_BEFORE = String.raw`}function vc(n,r){`
+const VC_DEF_BEFORE = anchors.VC_DEF_BEFORE
 let VC_INJECT = ''
 try {
   VC_INJECT = fs.readFileSync(path.join(__dirname, 'v6-inject.js'), 'utf8')

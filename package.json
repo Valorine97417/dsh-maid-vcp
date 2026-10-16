@@ -19,7 +19,7 @@
   "scripts": {
     "install-patch": "node patch/install-all.cjs",
     "install-patch:dry": "node patch/install-all.cjs --dry-run",
-    "test": "node tests/bundle.test.mjs && node tests/boost-fontface.test.cjs",
+    "test": "node patch/check-anchors.cjs && node tests/bundle.test.mjs && node tests/boost-fontface.test.cjs",
     "test:dom": "node tests/smoke.test.mjs && node tests/stable.test.mjs && node tests/trusted.test.mjs && node tests/security.test.mjs"
   },
   "exports": {
