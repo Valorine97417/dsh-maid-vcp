@@ -585,7 +585,7 @@
       // offset = 本次匹配在原文中的起点（replace 回调自带，/g 逐次递增、互不重叠）。
       // 旧写法 html.indexOf(m) 永远命中第一次出现的开标签：同一标签多次出现且后者
       // 未闭合时，after 里看到的是前一次的闭合标签 → 误判已闭合、不转义 → 未闭合
-      // <style> 在 fullRender 被 DOMParser 吞掉丢正文（七仓体检 2026-11-06）。
+      // <style> 在 fullRender 被 DOMParser 吞掉丢正文（七仓体检 2026-10-17）。
       var after = html.slice(offset + m.length).toLowerCase()
       if (after.indexOf('</' + name.toLowerCase() + '>') === -1) {
         // 未闭合：tail 场景 → 截断（丢弃未闭合标签及其后内容，避免泄漏）；
