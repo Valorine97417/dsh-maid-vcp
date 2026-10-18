@@ -9,29 +9,10 @@
  * 运行：node tests/bundle.test.mjs [bundle路径]
  */
 import assert from 'node:assert/strict'
-import fs from 'node:fs'
-import path from 'node:path'
 import { execFileSync } from 'node:child_process'
+import { loadBundle } from './_bundle.mjs'
 
-function findBundle() {
-  const arg = process.argv[2]
-  if (arg) return fs.existsSync(arg) ? arg : null
-  const candidates = []
-  const addDir = (d) => {
-    if (!d || !fs.existsSync(d)) return
-    const assets = path.join(d, 'dist', 'assets')
-    if (!fs.existsSync(assets)) return
-    for (const f of fs.readdirSync(assets)) {
-      if (/^index-[\w-]+\.js$/.test(f)) candidates.push(path.join(assets, f))
-    }
-  }
-  addDir(path.join(process.env.APPDATA || '', 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-web-frontend'))
-  addDir(path.join(process.env.APPDATA || '', 'npm', 'node_modules', '@deepseek-ai', 'dsh-web-frontend'))
-  return candidates[0] || null
-}
-
-const bundle = findBundle()
-assert.ok(bundle, '未找到 dsh-web-frontend bundle')
+const { source: bundle, text: t } = loadBundle(process.argv[2])
 console.log(`bundle: ${bundle}`)
 
 let passed = 0
@@ -43,15 +24,16 @@ function ok(name, fn) {
 
 console.log('== 1. 语法完整性 ==')
 ok('node --check 通过', () => {
-  execFileSync(process.execPath, ['--check', bundle], { stdio: 'pipe' })
+  execFileSync(process.execPath, ['--check', '--input-type=module'], { input: t, stdio: ['pipe', 'inherit', 'inherit'] })
 })
 
-const t = fs.readFileSync(bundle, 'utf8')
+// Scope generation-independent checks to the installed HTML case and sanitizer.
+const htmlCase = t.match(/case"html":(?:\{|return function\(\)\{)if\(typeof localStorage[\s\S]*?(?=case"code":)/)?.[0] || ''
 
 console.log('== 2. case"html" 分支特征 ==')
 ok('渲染开关 dsh.rawHtml', () => assert.ok(t.includes('dsh.rawHtml')))
 ok('稳定区模块 __vcpStable', () => assert.ok(t.includes('__vcpStable')))
-ok('case"html" 调 __vcpStable.render', () => assert.ok(t.includes('__vcpStable.render(n.value,i.streaming)')))
+ok('case"html" 调 __vcpStable.render（内容及 streaming）', () => assert.match(htmlCase, /__vcpStable\.render\(\w+\.value,(?:\w+\.streaming|!!\(\w+&&\w+\.streaming\))\)/))
 ok('图片转换正则 ![..](..)', () => assert.ok(t.includes('!\\[([^\\]]*)\\]\\(([^)]+)\\)')))
 ok('图片 URL 白名单 data:image', () => assert.ok(t.includes('data:image\\/')))
 ok('流式动画剥离正则', () => assert.ok(t.includes('animation:([^;"\']*);?')))
@@ -68,7 +50,9 @@ ok('容器开标签 props 解析', () => assert.ok(t.includes('parseOpen')))
 console.log('== 4. vc() 增强特征 ==')
 ok('onclick→input 桥', () => assert.ok(t.includes('__dshInput')))
 ok('on* 属性安全过滤', () => assert.ok(t.includes('/^on/i.test(c.name)')))
-ok('script 标签过滤', () => assert.ok(t.includes('i.localName==="script"')))
+ok('script 标签过滤（普通模式拒绝，可信模式允许）', () => assert.ok(
+  t.includes('i.localName==="script"') || /var tag = node\.localName\s+if \(tag === 'script'[\s\S]*?\{\s*if \(!trusted\(\)\) return null/.test(t)
+))
 ok('style 危险属性过滤', () => assert.ok(t.includes('position\\s*:\\s*fixed')))
 ok('z-index 过滤', () => assert.ok(t.includes('z-index\\s*:\\s*\\d{4,}')))
 ok('content: 过滤', () => assert.ok(t.includes('content\\s*:[^;]')))
