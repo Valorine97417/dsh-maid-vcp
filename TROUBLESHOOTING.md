@@ -188,6 +188,80 @@
 
 ---
 
+### 1.18 刷新报「Desktop Host is unavailable」＋点更新报「未能安全停止任务」：一场 HMR 竞态把 Host 打死，连累更新器安全阀
+
+- **症状**：桌面端刷新页面，界面弹「Desktop Host is unavailable」，此后**所有**刷新都同样报不可用；重启应用（Restart）可恢复。连带后遗症：这场崩溃之后点「应用更新」会弹「未能安全停止任务，更新尚未安装」，更新整次作废。
+- **原因**：不是 profile manifest 坏、不是 BOM、不是文件损坏——是 **HMR 热重载竞态把 Host 进程打死**。宿主崩溃日志里两组原文同时出现（`main` 侧报外壳收到的致命错，`host diagnostic` 侧报 Host 进程自己的栈）：
+
+  ```text
+  DesktopHostFatalError: cannot create effect on inactive context
+      at ChildProcess.<anonymous> (file:///…/resources/app.asar/lib/main.js:3711:49)
+  --- host diagnostic (as reported by the Host process) ---
+  CordisError: cannot create effect on inactive context
+      at Fiber.assertActive (…/@deepseek-ai/cordis/lib/index.js:1133:9)
+      at Proxy.plugin (…/@deepseek-ai/cordis/lib/index.js:1622:18)
+      at Object.apply [as callback] (…/@deepseek-ai/dsh-desktop-host/lib/index.js:80:12)
+      at async Fiber._reload (…/@deepseek-ai/cordis/lib/index.js:1356:5) {
+    code: 'INACTIVE_EFFECT'
+  }
+  ```
+
+  读法：`Fiber._reload` 已经在卸载/重载途中，`dsh-desktop-host` 的 `ctx.plugin` 回调此时才被调用，`Fiber.assertActive` 判定 context 已 inactive → 抛 `INACTIVE_EFFECT`。Host 进程一死，渲染侧取不到 Host，就统一报 unavailable。
+  **`web-boot.log` 只是受害者**：同一次崩溃里 `web-boot` 那几行是外壳连不上 Host 之后的次生报错，照着它排查会一路查错方向。
+  **连带更新失败**：这样崩过一次的宿主，shutdown 应答不完整。更新器 `stop(requireGraceful)` 的安全阀先叫宿主 shutdown（等 10s），不干净就 SIGTERM 强杀；一旦退出码非 0 / 未确认 shutdown / 超时，就抛 `DesktopHostUncleanExitError`（文案键 `updateStopFailed`），**整次安装作废、本地文件一点不动**。所以「未能安全停止任务」≠ 更新包坏了、≠ 装坏了。
+  三个字面量 `DesktopHostUncleanExitError` / `updateStopFailed` / `requireGraceful` 在本机 `resources\app.asar` 二进制里均可直接搜到（2026-10-18 实测）。记忆另记 `stop()` 约在 `lib/main.js:3812`、stop-failed 分支约在 11507 行——**这两个行号本轮未逐行复核（未取证到具体行号）**，只作定位线索用。
+- **解法**：
+  - 报 unavailable → **点 Restart 即可恢复**。别点「禁用第三方插件」（最右那颗）：这崩跟插件无关，禁了只会让排查面更大。
+  - 已经弹过「未能安全停止任务」→ 挑一个**没有任务在跑**的时机，把**整个应用退出重开**再点更新，让 Host 有一次干净的 shutdown 可应答。
+  - 更新包本身没坏：已下好的包躺在 `%LOCALAPPDATA%\@deepseek-ai\dsh-desktop-updater\pending\`（`updaterCacheDirName=@deepseek-ai/dsh-desktop-updater`，feed channel 为 nightly），可手动跑，但要另开安装窗口、装完应用会退出。
+  - 崩溃现场必看 `%APPDATA%\@deepseek-ai\dsh-desktop\logs\` 下的 `crash-<时间戳>-main.log`：按**时间戳相邻配对** `main.log` 与 `web-boot.log`，`INACTIVE_EFFECT` + `Fiber._reload` 这两个词同时出现在 main 侧，就是本条。
+- **验证**：**部分未验证**——「Restart 后恢复正常」本机成立（崩溃后重启可继续用）；「先整个应用退出重开、更新即可装成功」这条**未实测**（本轮没有可复现的待装更新）。可复现判据：反复强制刷新 / 反复重载触发 HMR → 看是否新落一个 `crash-*-main.log` 且含 `code: 'INACTIVE_EFFECT'` → Restart 后复测更新按钮。
+- **教训**：**「Desktop Host is unavailable」先读 Host 的栈，别读 web-boot。** 崩一次就沾上更新安全阀的账，处置顺序是「先 Restart 恢复可用，再整个退出重开去更新」，不是「反复点重试」。
+> 证据：记忆 lesson `0mvcif0xf`（崩溃与 web-boot 假象）、记忆 lesson `0mvcik7lt`（更新安全阀 `updateStopFailed`）；本机崩溃原文 `%APPDATA%\@deepseek-ai\dsh-desktop\logs\crash-2026-10-17T14-36-00-198Z-main.log`（5104 B，header：`app: @deepseek-ai/dsh-desktop 0.2.0-rc.2` / `electron: 44.0.0` / `node: 24.18.1` / `phase: startup`）与 `crash-2026-10-17T14-42-32-870Z-main.log`（同一组栈第二次）；asar 字面量实测 · 2026-10-18 补录
+
+### 1.19 桌面端升级一次，前端补丁整体归零：插件「看着没坏」，卡片却渲染不出来
+
+- **症状**：DSH 桌面端升级之后，什么都没动，卡片突然渲染不出来、HTML 整段变源码。去 profile 里看插件本体——文件都在、版本没变、软链没断，「看着没坏」。重装插件、改配置、开关渲染开关，全都不管用。
+- **原因**：桌面端升级会**整体重写 `resources\app.asar`**。本插件的卡片渲染能力有一半是**补丁层**——写进 asar 内前端 bundle（`dsh/node_modules/@deepseek-ai/dsh-web-frontend/dist/assets/index-*.js`）的替换内容；asar 一被重写，这些补丁**全部抹掉**，而插件本体留在 profile 里毫发无伤。所以现象是「插件在、能力没」。这跟 §1.7 的三层生效边界是同一张地图的另一半：1.7 讲「改哪一层怎么生效」，本条讲「**其中一层会被宿主升级整体归零**」。
+  判据：看 `resources\app.asar` 的 mtime 是否与这次 DSH 升级时间吻合——吻合就是本条的现场。（本机 2026-10-18 实测：`app.asar` Length 183849802、LastWriteTime `2026/10/18 0:40:31`，即已打过补丁的状态。）
+  **升级还会顺手换 bundle 的文件名**：记忆与 §1.17 记的代际是 `index-5SrrfWpU.js`，而本机 `Works/_asar-backup/` 现存备份是 `bundle-index-CN7NIWNw.js.2026-10-17T16-40-31-801Z`（939867 B）——id 已经不同代。所以任何「按文件名硬编码去找落点」的脚本/笔记，升级后都会先扑空。
+- **解法**：**先探 asar，别先怀疑插件或配置**。顺序固定为：① `node patch/install-all.cjs --dry-run` 看探测与替换计算；② 直接在 asar 内搜补丁标记（`window.__vcpStable` 与 `window.__vcpGen` 必须**同时**存在，见七·2）；③ 标记缺失 → 重跑 `node patch/install-all.cjs`（桌面端分支会走 `patch/patch-frontend-asar.cjs`），然后**完全退出并重启 DSH**（仅刷新页面不够，见 §1.7）。
+- **验证**：**部分未验证**——本条讲的是机制与排查顺序，「升级后重跑补丁即恢复」这条**本轮未做真机升级复验**。现有可用的判据是正向的：本机 asar 内 `window.__vcpStable` 实测出现 10 次、`window.__vcpGen` 5 次、`vcp-root` 27 次、`stripHtmlComments` 7 次（2026-10-18 二进制直搜），说明当前这份 asar 是**打过补丁**的状态；升级之后同一组搜索应归零，重跑补丁后应回到非零。
+- **教训**：**「插件没坏」和「能力还在」是两件事。** 卡片类故障的第一判断不是重装插件，而是确认 asar 里补丁标记还在不在；升级后的第一件事就是重跑补丁器。
+> 证据：记忆 lesson `0mvcmi9j0`（升级整体重写 app.asar、补丁被抹）；本机 `resources\app.asar` 时间戳与二进制标记直搜；`Works/_asar-backup/bundle-index-CN7NIWNw.js.2026-10-17T16-40-31-801Z` · 2026-10-18 补录
+
+### 1.20 前端补丁的代际账与「改动面审计」：整份 asar 里只该有一个文件不同
+
+- **症状**：补丁装上了、`--dry-run` 全绿、健康检查也过，前端行为却不对（消息区整块白屏 / 注释仍显形）。另一种症状是反过来：**不知道该改哪份 asar**——手里攒了好几个 `app.asar.bak-*`，分不清哪个是「干净基准」、哪个是「坏版本」，重打补丁时基准选错，越修越乱。
+- **原因**：前端补丁是**在同一份 asar 里一层层叠上去的**，而每一代补丁都必须以**原始未打补丁的 asar** 为基准；一旦拿错基准（比如拿已经打过坏补丁的那份当基准），补丁会「成功」，产物却是坏的。本仓的历史脉络如下（**两支早期脚本已不在仓内**——`patch/` 下现只有 `install-v6.cjs`、`patch-frontend.cjs`、`patch-frontend-asar.cjs`、`anchors.cjs`、`asar-io.cjs` 等共 16 个文件，无 `patch-webui-v8.cjs`、无 `fix-v9.mjs`，本条只作代际沿革记录，不作为可执行步骤）：
+  - **v8（已弃用）**：F 补丁写 AFTER 串时吞掉了 `h` / `m` 声明，组件一渲染就 `ReferenceError`，**整个消息区白屏**。这份坏版本曾留过备份 `app.asar.bak-bad-v8`。这条正是 §1.13「替换式补丁写 AFTER 串时吞掉声明前缀」的历史事故原型——**§1.13 记规则，本条记它当年长什么样、为什么整套弃用**。
+  - **v9（2026-10-13 修好）**：目标 bundle `index-5SrrfWpU.js`，633282 → 738882 B，sha `45116a3f…e81dd`；asar 内 11470 条 integrity **零不匹配**（证明改完还自洽）；基准是 `app.asar.bak-before-v8`（**打补丁前的那份**）。
+  - **此后**：前端补丁演进到 v10.3（vcp 0.6.14 时期），asar 尺寸换过代；本机 2026-10-18 实测 183849802 B。
+  - **备份体积账**：asar 备份曾累计占用约 **825 MB**（每个 `app.asar.bak-*` 都是一份完整副本）。**现已清理**——本机 `Works/_asar-backup/` 只剩 1 个 bundle 级备份 `bundle-index-CN7NIWNw.js.2026-10-17T16-40-31-801Z`（939867 B），不再有整包 `.bak` 副本。**这条账要记住：备份策略从「整包留一份」改成「留 bundle 那一份文件」，否则磁盘会被吃穿。**
+- **解法**：
+  - **改动面审计**（这一节最值钱的一条判据）：打完补丁后，把当前 asar 与**原始未打补丁的 asar** 逐个 packed 条目比对——**整份 asar 里应当只有 1 个文件内容不同**：`dsh/node_modules/@deepseek-ai/dsh-web-frontend/dist/assets/index-*.js`。2026-10-13 那次审计实测：11470 条 packed 条目，差异文件数 = 1。**只要比出第二个不同的文件，就是补丁改错了范围**，当场回滚，别往下走。
+  - 同一份 bundle 上叠的几个补丁应当**同时在场**并逐一验明：① **boot 审计补丁**（`if(o.length>0)throw new Error(` → `console.error(`，修「强制刷新页面」的启动崩溃，见 §1.15）；② **raw HTML 渲染补丁**（`window.__vcpStable` 那一族）。少一个就表现为「一部分功能好、一部分不对」。
+  - 基准选错的自救：用 `Works/_asar-backup/` 里的 bundle 级备份 + 宿主安装包重新落地，**不要**拿任何一个 `app.asar.bak-<坏代际>` 当基准。
+- **验证**：本机可复算的版本——在 asar 二进制里直搜补丁标记：`window.__vcpStable` 10 次、`window.__vcpGen` 5 次、`vcp-root` 27 次、`stripHtmlComments` 7 次（2026-10-18 实测），四个都非零＝补丁在场。改动面条目比对脚本**本轮未重建**（原审计脚本随 `_probe/` 一起丢过，见七·8），**审计数字沿用 2026-10-13 实测值，未做本轮复算**。
+- **教训**：**补丁装「成功」不等于产物「对」**——锚点匹配成功、健康检查通过、integrity 自洽，产物照样能在渲染期炸（v8 就是这么白屏的）。所以每代补丁都要过一遍**改动面审计**：只有 1 个文件不同，才算真装对了。
+> 证据：记忆 fact `0mv60mo1p`（v8 弃用 / v9 修好 / 改动面审计 1 个文件 / 备份 825 MB）；本机 `patch/` 目录实测 16 个脚本、`Works/_asar-backup/` 现存条目、asar 二进制标记计数 · 2026-10-18 补录
+
+### 1.21 插件页的「异常」与「包不可用」不是一回事，也不是「没加载」——三个状态各指各的
+
+- **症状**：插件页上某个插件挂着「异常」或「包不可用」标签，但聊天区里它的功能看着又能用；反过来，有的插件标签是干净的，实际却根本没跑起来。于是「它到底加载了没」这个问题，靠标签根本判断不了。
+- **原因**：插件页把**四个互不相同的东西**都塞进了一张卡片，中文文案又撞车——本机 asar 内前端词典实测：
+  - **包级**：`statusProblem: "异常"`（这个包自身的**包记录 error**：元信息解析失败一类，页面会给出「原因」一行 `reasonLabel`）；`statusMissingFiles: "包不可用"`（**依赖已登记、但磁盘上文件不可得**，即包解析不出可用文件）；`statusBeta: "实验性"`。
+  - **组件级**（同一个包里可以有很多个部件，各自独立跑）：`rowPhaseFailed: "异常"`（**fiber 相位失败**——组件真的起不来）；另有 `rowPhasePending: "等待依赖"` / `rowPhaseLoading: "加载中"` / `rowPhaseActive: "运行中"` / `rowPhaseUnloading: "卸载中"`；汇总行是 `partsCountFailed: "{count} 异常"`。
+  所以**「异常」有两个来源**：包级 `statusProblem` 与组件级 `rowPhaseFailed`。看到「异常」二字先分它是哪一层——包级异常常常只是元信息读不到，组件其实照跑；组件级异常才是真起不来。记忆里「『异常』＝包记录 error，非 fiber 失败」这句**只能覆盖包级一半**，实测词典里组件级同样写「异常」（`rowPhaseFailed`），落笔以词典为准。
+  「**包不可用**」的原文键是 `statusMissingFiles`——字面就是**文件缺失**，不要读成「manifest 解析不可得」这类语义猜测；它指向的是「依赖登记了、文件找不到」，排查入口是磁盘而不是代码。
+- **解法**：
+  - 判定「到底加载了没」，**别读标签，读三层证据**：① 组件级相位是不是 `rowPhaseActive`（这是`运行中`，但它只是**当前**相位快照）；② 宿主进程 `StartTime` 与插件 `package.json` / 补丁文件的 mtime 比对——**进程比文件早 = 文件改完之后进程还没重载，等于没加载**（判据同 §6.7）；③ 崩溃/启动日志里有没有这一轮的条目（见 §1.22「日志缺席也是证据」）。
+  - 「包不可用」→ 直接查那几条依赖在 profile 的 `node_modules` 里在不在、软链断没断。本机是 `link:` 形态挂载（`%USERPROFILE%\.dsh\profiles\desktop\package.json` 里 `dsh-maid-vcp` 等多条为 `link:D:/…`），源目录被改名/移走就整条断。
+  - 「异常」→ 点进详情看 `reasonLabel`（原因）那一行；包级异常且有 `metadataError: "包元信息错误：{error}"` 时，问题在 `package.json` 而不在运行时。
+- **验证**：**未验证**——本条是「读对标签含义」的判据条目，没有对应的一次实测回归。可复算的部分已做过：上面每个中文串对应的**键名**都在本机 `resources\app.asar` 内直接取证到（`statusProblem` / `statusMissingFiles` / `statusBeta` / `rowPhaseFailed` / `rowPhasePending` / `rowPhaseLoading` / `rowPhaseActive` / `rowPhaseUnloading` / `partsCountFailed` / `reasonLabel` / `metadataError`，2026-10-18 实测）。
+- **教训**：**同一个中文词在同一页面上指两件事的时候，去词典里找键名，别在界面上猜。** 排查插件「起了没」，标签只作线索，真判据是「进程 vs 文件时间」加「这一轮日志有没有它」。
+> 证据：记忆 lesson `0mvcn9q2k`（异常＝包记录 error / 包不可用＝依赖已登记但文件不可得）；本机 asar 词典键名实测（修正了记忆里「异常只指包级」的表述）· 2026-10-18 补录
+
 ## 二、卡片渲染问题（HTML 不渲染 / 显示源码 / 样式丢失 / 流式中断）
 
 ### 2.1 一切 VCP 卡都显示成源码（新环境 / 换电脑 / 清过缓存后最常见）
@@ -471,6 +545,23 @@
 
 ---
 
+### 4.10 第三方插件自带渲染视图，会整条绕过宿主渲染补丁——装的插件没错，是它没走这条链
+
+- **症状**：宿主渲染补丁明明在场（标记搜得到、计数正常、ASAR 也认），卡片却跟没打补丁一模一样：`<div id="vcp-root">` 整段当源码印出来、`<!--tts:-->` 这类标记也显形。而且**不是每次对话都这样**——切到某个视图/某段时间之后才出问题，或者换个会话就正常。
+- **原因**：宿主渲染补丁改的是**宿主自己的消息渲染函数**（见 §1.13 / §1.20 改的那一处）。**第三方插件如果注册了一个独立会话视图、并在里面自建整条 markdown 渲染链，那条链上根本没有宿主补丁。** 2026-10-17 的判例是 `dsh-better-display`（已卸载，**现已不在本机，包的源码不可复核，以下结构引自当时取证**）：
+  - 它注册 `conversation.view`，`id: "reader"`，`order: -5`（排在宿主默认视图前面）；
+  - 进入策略 `(requested || view == null) && view !== "reader" ? "reader" : null`——**只要没显式选过视图，就默认进 reader**；
+  - 正文渲染 `case "text"` 分支里，只有 `source === "user"` 走官方 `MarkdownText`，**助手消息一律走它自建的 `ReadingMarkdown`**（`mdast-util-from-markdown` + `micromark` + `katex` 整条独立链）；
+  - 在它的整包里搜 `vcp-root`、`stripHtmlComments` **零命中**——即它压根不认识本插件注入的 HTML 与注释标记，于是卡片成了纯文本、注释成了可见文字。
+  这解释了「**为什么有的地方好、有的地方坏**」：用户消息走宿主官方渲染（有补丁），助手消息走自建渲染（无补丁）。所以看到「只有我的卡片坏、引用块/表格都正常」时，别只怀疑本插件。
+- **解法**：**先分它是「插槽装饰」还是「独立视图 / 替换渲染器」**——这是本节唯一的判断动作，一次就能定生死：
+  - **插槽装饰型**（往宿主已渲染的内容里追加东西、或在边栏加面板）：它不接管正文渲染，**与宿主渲染补丁共存**，放心装。
+  - **独立视图 / 替换渲染器型**（注册 `conversation.view`、或自己 span 掉 `case "text"` 的 render）：**宿主补丁不在链上，必冲突**。要么别装，要么让它认本插件的标记（它的包里得有 `vcp-root` / `stripHtmlComments` 这两个识别点，缺一个就等于不认识）。
+  实操判据：**拿插件的整包 grep 一遍 `vcp-root` 与 `stripHtmlComments`，零命中就是它了**——这比读它的源码逻辑快得多。卸掉之后如果卡片立刻恢复，判据闭环。
+- **验证**：**未验证（本条无法在本机闭环）**——判例插件已卸载，本机 `%USERPROFILE%\.dsh\profiles\desktop\` 下已无 better-display 残留（`package.json` / 备份件 / `node_modules` 均查过），**无法重放该故障**。能复算的是**现象的反面**：本机当前环境（无该插件）下 asar 内 `vcp-root` 命中 27 次、`stripHtmlComments` 命中 7 次，卡片渲染正常——与「链上有没有补丁」这一解释一致。诊断顺序仍以 §1.19 为先（先查 asar 升级有没有把补丁抹掉），两条都排除了再怀疑第三方视图。
+- **教训**：**「补丁在」和「补丁生效」之间还隔着一个「谁在渲染」**。渲染入口被换掉时，盘上、下发、甚至 integrity 全都正常，怪象只在运行时出现——这类故障不要往补丁本身查，往「渲染链的入口是谁」查。
+> 证据：记忆 fact `0mvbe3kxo`（`dsh-better-display` 判例，源码结构引自已卸载包）；本机 asar 标记计数与 profile 残留反查 · 2026-10-18 补录
+
 ## 五、性能与缓存（vcp-fast）
 
 ### 5.1 长卡流式抖动 / 掉帧 / 动画重播
@@ -633,6 +724,21 @@ dsh plugin --profile web remove dsh-maid-vcp
 
 ---
 
+### 6.8 宿主日志只在崩溃时写文件——「找不到日志」本身就是一条证据（附进程时间判据）
+
+- **症状**：出过崩溃之后去翻日志，找不到「常驻日志」这种东西，目录里全是一堆 `crash-<时间戳>-<source>.log`，于是没法判断「这一轮到底有没有问题」；另一种表现是反过来——刚改完插件，行为一点没变，看着像是改动没生效，但文件明明保存了。
+- **原因**：**宿主不写常驻日志，只在崩溃时落一个文件。** 文件名形如 `crash-2026-10-17T14-36-00-198Z-main.log`，`<source>` 有三种：`main`（壳进程崩溃，文件里带 `--- error ---` 与 `--- host diagnostic ---` 两段）、`web-boot`（boot 阶段的渲染侧）、`host`（Host 进程）。本机实测（`%APPDATA%\@deepseek-ai\dsh-desktop\logs\`，10 个文件）**全部**是 crash-* 形态，最早的 `crash-2026-10-13T21-39-30-833Z-web-boot.log` 也只有 1863 B——这份目录没有「历史全量日志」，只有「事故快照」。于是有两条判读规则：
+  - **规则一（日志缺席＝间接证据）**：新启动之后如果**没有出现新的** `crash-*-web-boot.log`，说明这一轮没有条目在 boot 阶段未激活，可以作为「已经修好」的**间接**证据。注意是间接——它只证明「没崩」，不证明「功能对」。
+  - **规则二（进程比文件早＝还没加载）**：插件/补丁文件改完之后，宿主进程如果不重启就还在跑旧代码。判据是**宿主进程 `StartTime` 与 `package.json` / 补丁文件的 mtime 比对**：进程时间早于文件时间＝这一轮没加载到新代码。**不能拿 fiber 相位 active 当「已加载」的证据**——那只是内存里当前相位的快照，读不出它跑的是哪一版文件。
+- **解法**：
+  - 崩溃取证：**按时间戳配对**。同一时刻的 `crash-…-main.log` 与 `crash-…-web-boot.log` 是**同一次事故的两端**，先读 `main.log`（根因通常在 `--- host diagnostic ---` 段里，带 cordis 的调用栈与 `code` 字段），`web-boot.log` 往往只是受害者（另见 §1.18）。
+  - 判断「修好没」：重启后看 `logs\` 有没有新增文件；同时按 §6.7 的判据比对 `Get-Process | ? {$_.ProcessName -match 'DeepSeek Harness'} | select StartTime` 与文件 `stat`——**两个都过，才算这一轮真的加载了新东西**。
+  - 空文件也算记录：`crash-2026-10-16T00-57-11-466Z-host.log` 是 **0 字节**，它不是损坏，是「崩了但没来得及写内容」。别因为它是空的就删掉或跳过。
+  - 配对不上就别硬凑：只有一个 `web-boot.log` 而没有同时刻 `main.log` 时，多半是 boot 阶段的问题（对应 §1.13 / §1.15），先按那两条查。
+- **验证**：已复算——本机 `logs\` 目录 10 个文件的完整清单与字节数（`crash-2026-10-13T21-39-30-833Z-web-boot.log` 1863、`2026-10-14T13-15-19-613Z-web-boot.log` 1603、`2026-10-14T14-46-32-272Z-web-boot.log` 14054、`2026-10-16T00-57-11-466Z-host.log` 0、`2026-10-17T14-36-00-198Z-main.log` 5104、`2026-10-17T14-42-19-976Z-web-boot.log` 665、`2026-10-17T14-42-32-870Z-main.log` 1419、`2026-10-17T14-43-25-746Z-web-boot.log` 666、`2026-10-17T18-51-07-544Z-web-boot.log` 20612、`2026-10-17T22-28-24-706Z-host.log` 2562），且**目录里不存在非 crash-* 的日志文件**——直接印证「只在崩溃时写」。进程时间判据的用法同 §6.7 实测命令。
+- **教训**：**日志系统的「没有」也是一种读数。** 排查时先说清「这个系统什么情况下会写、什么情况下不会写」，再谈「没找到＝没发生」成不成立；否则会把「没记录」误读成「没出事」。
+> 证据：记忆 lesson `0mvcsgcak`（日志只在崩溃时写 / 日志缺席作间接证据 / 进程 StartTime vs 文件 mtime）；本机 `%APPDATA%\@deepseek-ai\dsh-desktop\logs\` 目录实测 · 2026-10-18 补录
+
 ## 七、排查手法
 
 1. **先定位层次，再动手。** 提示词/宿主路由 → 重启 DSH；`client.js` → 硬刷新；`patch/` → 重跑补丁 + 完全重启。三层混着改，最后一定分不清是谁的锅（见 6.5）。
@@ -651,6 +757,70 @@ dsh plugin --profile web remove dsh-maid-vcp
 13. **「深蓝直角空块」这类偶发**：先记录 rev 与消息内容，重启复测；不复现就不改引擎（见 2.13）。
 
 ---
+
+### 7.14 补丁验证必须分三层，「运行时层」现在还剩哪条通路（2026-10-18 修订）
+
+- **症状**：补丁「装好了」——盘上字节变了、`curl` 下发的 bundle 里也搜得到特征串，可打开界面一看，现象一点没变。于是又开始怀疑补丁写错了、缓存没清、或者插件没加载，来回折腾几轮才发现补丁确实打对了，是**更下游的地方**出的问题。
+- **原因**：**「代码在那儿」和「行为变了」是两件事，中间隔着两层。** 只验前两层，等于只证明文件写对了。三层是：
+  - **① 盘上**：asar 条目字节确实变了（或改的是仓里的源文件）。证明「写进去了」。
+  - **② 服务端下发**：宿主从 asar 读出来、经 HTTP 发出去的那份，与盘上一致。取法 `curl http://127.0.0.1:19387/assets/index-<id>.js`（**注意 bundle 文件名会换代**，当前实际 id 去 asar 里 `/dist/assets/` 看一眼，别照抄历史 id），比对里面有没有特征串、字节数与 asar 条目是否相等。证明「发出去的是改过的那份」。
+  - **③ 运行时行为**：真人操作一遍看现象。**只有这一层能证明补丁真的生效。**
+  2026-10-15 的实例就是这个坑：注释剥离补丁**盘上对、下发对，运行时照显形**——真因挂在更下游（`render` 开头有一句 `if (!v) return null`，先短路了，根本没走到剥离那一步）。当时正是因为第三层验不了，才误判了好几轮。
+- **解法**：
+  - **本层判据**：改完补丁先问自己「我现在验的是第几层」，第①②层过了**不许宣布修好**，必须有人真跑一遍第③层。
+  - **曾经能自验第三层的通路（现已失效，别再找）**：2026-10-15 曾用「自签 cookie + 无头浏览器」绕过认证直接进 `19387` 看运行时——取 `%USERPROFILE%\.dsh\.credentials.yaml` 里 `client-connection / browser-session` 的 secret，按 cookie 签名算法自签（名 = `dsh-auth-` + base64url(sha256(authority))，值 = `v1.<base64url(payload)>.<base64url(hmacSha256(secret, body))>`，payload = `{version:1, authority, issuedAt, expiresAt}`），再用 `ego_cdp` 的 `Network.setCookie` 写入后 `location.reload()` 进 `19387`。**2026-10-16 起 ego-browser 已卸载，`ego_cdp` 通路不再可用**（本机 profile 里已无残留），签名实现所在的 `conn.js:284-305` 也**未能在本机取证到**（`profiles\*\node_modules` 下没有该文件），所以这条通路**只能作为历史记录**，不要照着做。
+  - **现在第三层怎么验**：桌面壳是 `dsh-app://app/`，**壳内渲染只能肉眼**——没有可用的自动化通道。所以本仓的实践是：能自动化的用探针（§七·8，直接从源码抠真函数跑用例），**验不到的运行时现象老实标「未验证」**，等真人操作复测，不要用①②层的结果冒充。
+  - **顺手排除 HTTP 缓存**：`curl -sI <bundle URL>`，响应头里**没有** `Cache-Control` / `ETag` / `Last-Modified` 时，Chromium 不做启发式缓存，可以直接排除缓存这条嫌疑（本机实测这三个头都没有）。有这三个头才需要谈清缓存。
+- **验证**：**未验证（本机无运行时自验通路）**——① ② 层可复算：asar 内标记 `window.__vcpStable` 10 次、`window.__vcpGen` 5 次、`stripHtmlComments` 7 次、`vcp-root` 27 次（2026-10-18 实测）；`curl -sI` 无三个缓存头也已实测。③ 层（运行时）**本轮没有可用通路复测**，故本条只作方法论，不作「已修好」的依据。
+- **教训**：**验证层级写进排查流程，别写进脑子。** 每次宣布修好之前先指认「我验的是第几层」，这一句能省掉后面半数返工。
+> 证据：记忆 lesson `0mv8en07g`（三层验证 / 自签 cookie 通路 / ego-browser 已卸载 / v6.40→v6.41 三层全对但运行时错的实例 / `curl -sI` 缓存判据）；本机 asar 标记计数、`curl -sI` 响应头实测 · 2026-10-18 补录
+
+## 附录 A、宿主版本兼容性盘点（0.2.1-rc.2，2026-10-18）
+
+> 这份附录只记「装得上装不上」这一层，不替代正文里的排查条目。**状态一律以实测为准，没补的写「未补」，不许写成已完成。**
+
+### A.1 这件事为什么值得单独记一节
+
+- **症状**：升级后常见的就这几种——宿主升到新的 rc 之后，插件页里某个包直接装不上、或者装上了标「异常」；另一种是**全都装上了、也全都跑着，看着一切正常**——但宿主下一版按新规则判兼容时，这批包会被一并拒掉。前者当场能发现，后者要等下一次升级才炸。
+- **原因**：宿主判兼容**优先看 `engines.dsh`，其次才看 peer 依赖**。本仓这一批插件（含 vcp 自己）历史上**只声明了 peer**（`@deepseek-ai/cordis` ＋ `react`），**没有 `engines.dsh` 字段**——所以「现在能装」靠的是 peer 恰好宽松，而不是声明了兼容范围。真正的兼容性事故样本已经出现过一次：`@nanmicoder/dsh-agent-teams` **0.1.23 因为漏列 rc.2 被宿主拒绝安装**，作者补出 0.1.25（精确 peer 到 rc.2）之后才装回去。也就是说，**peer 里少写一个版本号，就是「装不上」**——这个失败模式是实测过的，不是推测。
+- **解法**：
+  - 给每个自维护插件补 `engines.dsh`，值按「确实测过的那一段」写（别图省事写 `*`，那是把判定权扔了）。
+  - 升级宿主之后的固定动作（本仓至少这两条）：① vcp 的 **asar 前端补丁必然失配**（落点仍是 `dsh-web-frontend/dist/assets/index-*.js`，bundle 名会换代），**须重跑 `node patch/install-all.cjs`（先 `--dry-run` 体检）**，重启后按 §1.19 / §1.20 验标记与改动面；② `19387` 相关的**端口硬编码**要改成从配置/宿主读，别再写字面量——本仓现存 `lib/index.js:1055` 一处代码（三个 origin 字面量 `http://127.0.0.1:19387` / `http://localhost:19387` / `http://[::1]:19387`）与 `README.md:205`、`README.en.md:188`、`DESIGN.md:170` 三处文档；**「四处硬编码」这一说法在代码侧只对得上一处**，其余在文档里。
+- **验证**：**未补**——本节盘点项本身没有回归用例，只能靠「升级后重装一遍」验。
+
+### A.2 本机实测盘点矩阵（清单表，2026-10-18，宿主机 0.2.1-rc.2）
+
+**判定口径**：`engines.dsh` 有无只看 `package.json` 字面字段；peer 只列与宿主版本判定相关的那几条（`@deepseek-ai/cordis` 不进这条判定）。
+
+| 插件 | 版本 | `engines.dsh` | 与宿主版相关的 peer | 状态 |
+| --- | --- | --- | --- | --- |
+| `dsh-maid-vcp` | 0.6.15 | 无 | `@deepseek-ai/cordis@^4.0.1`、`react@^18.3.1` | 未补 |
+| `dsh-maid-tts-fix` | 0.6.6 | 无 | 同上（cordis / react） | 未补 |
+| `dsh-maid-comfyui` | 0.5.5 | 无 | 含 `@deepseek-ai/dsh-settings@… \|\| ^0.2.0-rc.2` | 未补 |
+| `dsh-maid-delegation` | 0.2.1 | 无 | cordis / react | 未补 |
+| `dsh-maid-guard` | 0.3.2-fork.2 | 无 | 无 peer 声明 | 未补 |
+| `dsh-maid-jasna` | 0.2.0 | 无 | cordis / react | 未补 |
+| `dsh-maid-lane-fix` | 0.3.2 | 无 | cordis / react | 未补 |
+| `dsh-maid-patch-kit` | 0.1.0 | 无 | cordis / react | 未补 |
+| `dsh-maid-preset` | 0.7.11 | 无 | cordis / react | 未补 |
+| `dsh-maid-scenery` | 0.2.3 | 无 | cordis / react | 未补 |
+| `dsh-bili-scroll` | 0.1.8 | **有**：`>=0.1.7-rc.1` | `@deepseek-ai/dsh-tools@*`、`schemastery@*` | 已声明 |
+| `dsh-our-free-model` | 2.5.1 | 无（只有 `engines.node`：`^22.19.0 \|\| >=24.0.0`） | 4 条 `^0.1.2-rc.1 \|\| ^0.1.7-rc.2 \|\| ^0.2.0-rc.1` ＋ `cordis@^4.0.2` ＋ `schemastery@^3.18.4` | 未补 |
+| `@nanmicoder/dsh-agent-teams` | 0.1.25 | 无 | 精确 peer 到 rc.2（0.1.23 曾因漏列被拒） | 已装回 |
+| `@michengai/archive-manager` | 1.1.0 | 无 | 作者已补 peer 至 rc.1 / rc.2 双 PASS | 已可用 |
+| `@michengai/automation` | 1.0.0 | 无 | 同上 | 已可用 |
+| `@michengai/im-connect` | 1.0.0 | 无 | 同上 | 已可用 |
+| `@michengai/btw` | 1.0.0 | 无 | 同上 | 已可用 |
+| `@michengai/simplify` | 1.0.1 | 无 | 同上 | 已可用 |
+| `@michengai/skills-manager` | 1.2.5 | 无 | 同上 | 已可用 |
+
+**读法**：**「已可用」和「已声明」是两件事**——`@michengai` 系与 agent-teams 靠 peer 补到位解决了眼前的装不上；**10 个 `dsh-maid-*` 与 `dsh-our-free-model` 仍是「靠 peer 宽松蒙过去」的状态，`engines.dsh` 一个都没补**。唯一的正面样本是 `dsh-bili-scroll`（`engines.dsh: ">=0.1.7-rc.1"`），照它的写法补齐即可。
+
+**确认无影响的部分**：`invariant`、`stats`、`both`（b 站双写）、`dshHome`、`azure` 这几个此前逐个核过，升到 0.2.1-rc.2 前后行为一致，**没有待办**。
+
+- **教训**：**兼容性不是「能装上」那一刻的状态，是「下一版还认不认你」的问题。** `engines.dsh` 缺着不会立刻出事，等宿主收紧判定时全体一起爆——所以这栏必须在平时补齐，而不是等升级当天补。
+
+> 证据：记忆 topic `0mvc50k49`（0.2.1-rc.2 升级盘点 / agent-teams 0.1.23→0.1.25 / 9 插件缺 engines.dsh / 升级后必重跑 asar 补丁 / 19387 硬编码 / 零影响名单）；本机 `%USERPROFILE%\.dsh\profiles\desktop\package.json`（34 个依赖）与各插件 `package.json` 实测 · 2026-10-18 补录
 
 ## 暂未遇到（留白，供后续补记）
 
