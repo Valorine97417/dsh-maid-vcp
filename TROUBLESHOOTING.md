@@ -117,6 +117,10 @@
 - **原因**：替换式前端补丁在写 `AFTER` 串时，只写了「锚点之后要追加的内容」，漏掉了锚点里原有的变量声明前缀，导致 `h` / `m` 变成未声明的自由变量。锚点字符串本身匹配成功、补丁「打上了」，但产物在组件渲染期才炸——静态锚点检查抓不到。
 - **解法**：铁律——**`AFTER` 串必须完整保留 `BEFORE` 里出现的所有声明**，替换是「整体换掉」，不是「在原锚点后追加」。改锚点时先在 `BEFORE` 里逐个点名所有 `const` / `let` / 解构声明，再逐字搬到 `AFTER` 开头。
 - **验证**：**未验**：本轮取证未留存原始 `ReferenceError` 报错串，也未找到改法落地后的回归记录。落盘前须补一次「装补丁 → 打开消息列表 → 有卡有文的会话各一条」的真机复验，并把报错原文补进本条。
+
+- **本机实测（2026-10-18）**：本条症状再来一例，来源会话 `session-adce7769` 第 1205 条（同批 `334edf38` 第 33 条独立复核，结论一致）。现象与上面描述同型：补丁装完、静态锚点检查通过，打开消息列表整块空白，控制台抛 `ReferenceError`；根因仍是 `AFTER` 串吞掉了锚点里原有的 `const` / 解构声明前缀，使 `h` / `m` 成为未声明自由变量。**不要把本条与 §1.12 合并**：1.12 是前缀锚点抢跑打出 `}();();` 语法错误（打包期即暴露），本条是打包成功、渲染期才炸——两个根因、两样现象。
+- **落地纪律补一句**：改这类锚点时，先 `Select-String` 出 `BEFORE` 里所有 `const` / `let` / 解构行，逐字搬进 `AFTER` 开头，再比对行数；`node --check` 只查语法，抓不到自由变量。
+
 - 来源：会话取证 `_probe/_cand-session.md:25-31`（会话 `2c414941`、`3d3bfde6`）；同族规则已写入 `AGENTS.md` 的「AFTER 必须完整保留 BEFORE 中所有声明」。
 
 ### 1.14 `ELECTRON_RUN_AS_NODE=1` 下 asar 补丁器把 app.asar 当成 asar 内路径，读写全报 ENOENT
@@ -261,6 +265,19 @@
 - **验证**：**未验证**——本条是「读对标签含义」的判据条目，没有对应的一次实测回归。可复算的部分已做过：上面每个中文串对应的**键名**都在本机 `resources\app.asar` 内直接取证到（`statusProblem` / `statusMissingFiles` / `statusBeta` / `rowPhaseFailed` / `rowPhasePending` / `rowPhaseLoading` / `rowPhaseActive` / `rowPhaseUnloading` / `partsCountFailed` / `reasonLabel` / `metadataError`，2026-10-18 实测）。
 - **教训**：**同一个中文词在同一页面上指两件事的时候，去词典里找键名，别在界面上猜。** 排查插件「起了没」，标签只作线索，真判据是「进程 vs 文件时间」加「这一轮日志有没有它」。
 > 证据：记忆 lesson `0mvcn9q2k`（异常＝包记录 error / 包不可用＝依赖已登记但文件不可得）；本机 asar 词典键名实测（修正了记忆里「异常只指包级」的表述）· 2026-10-18 补录
+
+### 1.22 `bundle.test.mjs` 报「未找到 dsh-web-frontend bundle」——测试环境里没有那块 bundle，不是补丁坏了
+
+- **症状**：跑 `node tests/bundle.test.mjs` 直接崩在断言上：`AssertionError [ERR_ASSERTION]: 未找到 dsh-web-frontend bundle`，随后是一串栈。补丁本身装得上、页面也正常，唯独离线测试红。——注意：现行 `tests/bundle.test.mjs:34` 已经是 `ok('渲染开关 dsh.rawHtml', …)`，**原始那行 assert 已随修复重写，未取证到当时原文**。
+- **原因**：这个测试要读的是**桌面端 asar 里**那份前端产物（`resources\app.asar` 内 `dsh-web-frontend/dist/assets/index-*.js`，asar 内条目名形如 `bundle-index-5SrrfWpU.js`），不是仓里的源码。裸跑时既没给目标路径、也没替用户去猜安装位置，于是用来断言的对象本身是 `undefined` —— 报出来像「补丁坏了」，其实是**被检对象不在场**。补丁器本体在没有这块 bundle 时也会打一行同类提示（`patch/patch-frontend-asar.cjs:556`：`'[v10] asar 内未找到 dsh-web-frontend 的 dist bundle（index-*.js）。'`）。
+- **解法**：把「找 bundle」这件事从各个测试里抽出来，做成一个只读模块——
+  1. 新增 `tests/_bundle.mjs`：`loadBundle(target)` 优先吃显式参数，其次读环境变量 `DSH_ASAR`，再走 `patch/asar-io.cjs` 的 asar 读取（`readAsar` + `listPacked`），最后回落到目录分支；匹配用 `const entryRE = /\/dsh-web-frontend\/dist\/assets\/index-[\w-]+\.js$/`。文件内注释明写**只读，绝不解包到安装目录**。
+  2. `tests/bundle.test.mjs` 改为 `import { loadBundle } from './_bundle.mjs'`，从 `loadBundle(process.argv[2])` 拿 `{ source, text }`。
+  3. 新增 `tests/bundle-location.test.mjs`：只测「定位逻辑」本身（传目录、传 app.asar、传 env 三种入参），与渲染断言解耦——定位一旦坏了，不会再伪装成「补丁坏了」。
+  4. `tests/README.md` 写清跑法：`node tests/bundle.test.mjs <bundle 或 app.asar 路径>`，或先 `set DSH_ASAR=…`。定位不到时抛的是明确文案：`未找到 dsh-web-frontend bundle；请传 bundle/app.asar 路径或设置 DSH_ASAR`（`tests/_bundle.mjs:42`）。
+- **验证**：修复提交 `309628a`（`test: support read-only desktop bundle validation`）。收尾实测口径：bundle 39 项通过 / 定位回归 10 项通过 / anchors 10 组通过 / fontface 5 用例通过 / diff 检查通过。
+- 与 §1.9 不是一回事：1.9 是**测试自身依赖**缺（绝对路径 / 可选依赖），本条是**被检对象**缺。
+> 证据：`tests/_bundle.mjs:6`、`:42`；`tests/bundle.test.mjs:13`、`:15`；`tests/bundle-location.test.mjs`；`patch/patch-frontend-asar.cjs:556`；提交 `309628a`；会话 `ff303029` #12、`session-adce7769` #1168（候选 `_r3-session.md` S8）
 
 ## 二、卡片渲染问题（HTML 不渲染 / 显示源码 / 样式丢失 / 流式中断）
 
