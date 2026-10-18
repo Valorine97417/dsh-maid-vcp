@@ -151,6 +151,41 @@
 - **验证**：已核：远端 HEAD `4652fb8`、远端多 6 个文件（5 款字体共 14.76MB + `examples/情书·春水笺.html`）、本地多 5 处改动 + 5 个 `_probe`（需 `add -f`）、两边版本号同为 v0.6.14 但 MD5 不同。
 - 来源：记忆 `0mvdv7157-c70256daf13b49f6ac43907684`（topic / dsh-maid-vcp）。
 
+### 1.17 combo URL 把所有插件 client.js 拼成一条 bundle script：一个入口失败，整链全不激活（含 artifactRevision 失配这一具体触发源）
+
+- **症状**：装完 / 重装 / 更新过插件之后，**一批插件同时不激活**——面板里它们的按钮、路由、面板项全体消失或报错，而**不是**单独某一个插件坏掉。浏览器日志里的原文是这两行（先失败、随后整链被跳过）：
+
+  ```text
+  bundle script … failed to load
+  skipped after an earlier failure of this bundle
+  ```
+
+  出问题的请求形态是**一条 combo URL 把多个插件的 `client.js` 拼在一起**：
+
+  ```text
+  plugins/??a/client.js,b/client.js,…&rev=<hash>
+  ```
+
+  也就是说：一个入口失败 → 整条 bundle 被跳过 → **同一条链上的所有插件都不激活**。本机实测（2026-10-15 12:47 ~ 2026-10-17 10:03）共出现 **8 次**；同族报错另计——`bundle script failed to load / rev 失配 / failedBundleUrls` 11 次、`import failed / entry did not activate` 10 次。
+
+- **原因**：两层，缺一不可。
+  1. **combo 拼接 = 共享失败域**。宿主把带 `dsh.client` 的包的 `client.js` 用 `plugins/??a/client.js,b/client.js,…` 这种 combo 形式**合并成同一个 script 请求**送进页面。既然是同一个 `<script>`，任何一个入口 404 / 抛错 / 语法错，整条脚本即判失败，宿主记下这条 URL 后对同链其余入口一律 `skipped after an earlier failure of this bundle`——所以现象永远是「成批不激活」，不是「单个坏」。
+  2. **`artifactRevision` 失配是这条链最常见的具体触发源**。`rev` 不由源码内容派生，而是由 `client.js` 的 **`mtimeMs` / `ctimeMs` / `size`** 三个文件元数据算出来的 `artifactRevision`。`pnpm install` 重写 `node_modules` 后这三个字段全变 → 页面手上那条**旧 combo URL 里的 `rev` 已作废** → 请求直接 404 → 依然走到「整链失败」这条路。这就是为什么它总在 install / 重装之后发作。
+
+- **解法**：
+  1. **定位口是 `failedBundleUrls`**（日志与宿主运行时都能拿到）：先看**是哪一条 URL** 失败，再从那条 URL 的 `plugins/??a/client.js,b/client.js,…` 里反查**是哪个包**的入口把它拖挂的。**分流判据**：`failedBundleUrls` 有内容 → 是本条；为空、且宿主档案里有 `entry.disabled` 被置真 → 去查 **1.15**（那是另一个病）。
+  2. **重启宿主自愈**：重启后 `rev` 按当前文件元数据重算，combo URL 换新，链即可正常加载。这是**应急手段**，不是根治——下次 `pnpm install` 还会重演。
+  3. **千万别点「禁用第三方插件」**：它会把**同链上本来正常的插件一起停用**——本条的病根是「一条链共享失败域」，而「禁用第三方插件」正手按在这个失败域上，属**二次伤害**（越点坏得越多，且恢复时要一个个重新启用）。
+  4. **排查单插件时不要裸 `curl` `/plugins/??<pkg>/client.js`**：不带 `rev` 参数必然回 404，会把你引到「这个插件包坏了」的错误结论上。要带上**页面实际使用的那条 `rev`**（从 Network 面板里复制整条 combo URL，或去掉其余项只留目标包、其余参数照抄）。
+
+- **验证方式**：**未验**——「重启自愈」在本机只被记为临时手段（`bundle script failed to load` 的同族记录），**没有留存「重启前后 `failedBundleUrls` 由非空变空、同链插件全部恢复激活」的回归现场**，落盘前须补一次完整复验并把日志原文补进本条。可操作的判据（按顺序）：
+  1. 复现态：日志/运行时 `failedBundleUrls` 非空，且里面是一条 `plugins/??…&rev=…` 形态的 URL；
+  2. 重启后：`failedBundleUrls` 为空（或不再新增同一条 URL），同链上**所有**插件在面板里恢复；
+  3. 单插件复核：`curl -sI "http://127.0.0.1:<port>/plugins/??dsh-maid-vcp/client.js&rev=<页面实际 rev>"` 回 **200**；把 `rev` 改成一个假值重试，应回 404——这一步证明 `rev` 确实是失配点，而不是包本身坏；
+  4. 反向确认没有踩 1.15：宿主档案里该插件的 `entry.disabled` 为假/不存在。
+
+> 证据：记忆 lesson 0mv88yxvl、会话候选 C33（出现 8 次，2026-10-15 12:47 ~ 2026-10-17 10:03）· 2026-10-18 补录
+
 ---
 
 ## 二、卡片渲染问题（HTML 不渲染 / 显示源码 / 样式丢失 / 流式中断）
