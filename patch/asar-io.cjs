@@ -25,7 +25,16 @@
  */
 'use strict'
 
-const fs = require('node:fs')
+// 必须用 original-fs（未打 asar 补丁的原始 fs）：在 ELECTRON_RUN_AS_NODE 下运行时，
+// node:fs 已被 Electron 的 asar 包装接管，会把 app.asar **自己**也当成 asar 内路径
+// （asarPath=app.asar、filePath=''）→ openSync 直接 ENOENT。普通 node 没有这个模块，
+// 回落到 node:fs（此时没有包装，行为正确）。
+let fs
+try {
+  fs = require('node:original-fs')
+} catch {
+  fs = require('node:fs')
+}
 const crypto = require('node:crypto')
 
 const HEADER_SIZE = 16

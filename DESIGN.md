@@ -8,39 +8,42 @@
 
 ## 0. 字体库（内置精选 + 外置全量 双源）
 
-> `/fonts/` 服务解析两个来源：① **插件内置精选**（assets/fonts，随插件分发，任何电脑装上即可用，woff2 子集共 8.9MB）；② **外置大库**（settings `raw-html.fontsRoot` 可配置，默认 `I:\字体`，本机 219 款全量；其他电脑可指向自己的字体库或留空）。
+> `/fonts/` 服务解析两个来源：① **插件内置精选**（assets/fonts，随插件分发，任何电脑装上即可用，woff2 子集共 54.2MB）；② **外置大库**（settings `raw-html.fontsRoot` 可配置，默认 `I:\字体`，本机 219 款全量；其他电脑可指向自己的字体库或留空）。
 
-### 0.0 内置精选（随插件分发 · 无需配置 · 直接可用 · 全部开源授权）
+### 0.0 内置精选（随插件分发 · 无需配置 · 直接可用）
 
-> 用法：`@font-face{font-family:'Lanxi-WenKai';src:url('/fonts/Lanxi-WenKai.woff2');}` 后引用。由 `tools/subset_fonts.py`（开源 7 款）+ `tools/subset-style-fonts.py`（12 风格全量 19 款，先生 2026-08-29 拍板入库）生成（GB2312 一级 3755 字 + 标点 + 数字序号；鱼尾行书繁为全 BMP 保繁体）。**26 款内置字体随包分发，任何电脑装插件即开盖即用**；含开源授权 + 先生自备字库子集（授权由先生确认）。
+> 用法：`@font-face{font-family:'Lanxi-WenKai';src:url('/fonts/Lanxi-WenKai.woff2');}` 后引用。由 `tools/subset_fonts.py`（开源 7 款，全 OFL 授权）+ `tools/subset-style-fonts.py`（先生 2026-08-29 拍板入库的自备字库 13 款）生成（GB2312 一级 3755 字 + 标点 + 数字序号）。**25 款内置字体随包分发，任何电脑装插件即开盖即用**；其中 **7 款开源（7.3MB，OFL 授权）/ 18 款先生自备（46.9MB，授权由先生确认）**。
 
-| 领域 | font-family 名 | /fonts/ 路径 | 体积 |
-|---|---|---|---|
-| 楷书 | `Lanxi-WenKai` | Lanxi-WenKai.woff2 | 883KB |
-| 楷书·细 | `Lanxi-WenKaiLight` | Lanxi-WenKaiLight.woff2 | 921KB |
-| 手写楷 | `Lanxi-MaShanZheng` | Lanxi-MaShanZheng.woff2 | 1.7MB |
-| 黑体 | `Lanxi-HeiTi` | Lanxi-HeiTi.woff2 | 1.3MB |
-| 黑体·细 | `Lanxi-HeiTiLight` | Lanxi-HeiTiLight.woff2 | 1.3MB |
-| 黑体·粗 | `Lanxi-HeiTiBold` | Lanxi-HeiTiBold.woff2 | 1.4MB |
-| 英文花体 | `Lanxi-GreatVibes` | Lanxi-GreatVibes.woff2 | 44KB |
-| 宋体·正文 | `Lanxi-可宋` | Lanxi-可宋.woff2 | 2.79MB |
-| 宋体·标题 | `Lanxi-朗宋` | Lanxi-朗宋.woff2 | 2.05MB |
-| 宋体·副题 | `Lanxi-品宋` | Lanxi-品宋.woff2 | 2.53MB |
-| 宋体·颜韵 | `Lanxi-颜宋` | Lanxi-颜宋.woff2 | 2.37MB |
-| 极细·空灵 | `Lanxi-静黑超细` | Lanxi-静黑超细.woff2 | 1.39MB |
-| 黑体·几何 | `Lanxi-点黑` | Lanxi-点黑.woff2 | 1.92MB |
-| 冲击·超粗 | `Lanxi-超粗黑` | Lanxi-超粗黑.woff2 | 0.73MB |
-| 可爱·卡通 | `Lanxi-卡通` | Lanxi-卡通.woff2 | 1.17MB |
-| 可爱·手绘 | `Lanxi-叮叮` | Lanxi-叮叮.woff2 | 4.21MB |
-| 可爱·萌系 | `Lanxi-喵喵` | Lanxi-喵喵.woff2 | 2.88MB |
-| 手写·文人 | `Lanxi-春兰茅坤` | Lanxi-春兰茅坤.woff2 | 1.73MB |
-| 书法·行书（刊头首选） | `Lanxi-鱼尾行书` | Lanxi-鱼尾行书.woff2 | 3.70MB |
-| 书法·江湖 | `Lanxi-狂侠体` | Lanxi-狂侠体.woff2 | 3.57MB |
-| 少女·手写日记（仅手账场景） | `Lanxi-暗恋初夏` | Lanxi-暗恋初夏.woff2 | 3.25MB |
-| 少女·标题俏皮（仅手账场景） | `Lanxi-秀英体` | Lanxi-秀英体.woff2 | 1.82MB |
-| 少女·软萌（仅手账场景） | `Lanxi-初心少女` | Lanxi-初心少女.woff2 | 1.46MB |
-| 少女·童趣（仅手账场景） | `Lanxi-丫丫体` | Lanxi-丫丫体.woff2 | 1.65MB |
-| 繁体·行书（须配繁体内容） | `Lanxi-鱼尾行书繁` | Lanxi-鱼尾行书繁.woff2 | 7.64MB |
+| 领域 | font-family 名 | /fonts/ 路径 | 体积 | 授权 |
+|---|---|---|---|---|
+| 楷书 | `Lanxi-WenKai` | Lanxi-WenKai.woff2 | 0.86MB | OFL |
+| 楷书·细 | `Lanxi-WenKaiLight` | Lanxi-WenKaiLight.woff2 | 0.90MB | OFL |
+| 手写楷 | `Lanxi-MaShanZheng` | Lanxi-MaShanZheng.woff2 | 1.64MB | OFL |
+| 黑体 | `Lanxi-HeiTi` | Lanxi-HeiTi.woff2 | 1.27MB | OFL |
+| 黑体·细 | `Lanxi-HeiTiLight` | Lanxi-HeiTiLight.woff2 | 1.25MB | OFL |
+| 黑体·粗 | `Lanxi-HeiTiBold` | Lanxi-HeiTiBold.woff2 | 1.32MB | OFL |
+| 英文花体 | `Lanxi-GreatVibes` | Lanxi-GreatVibes.woff2 | 0.04MB | OFL |
+| 宋体·正文 | `Lanxi-可宋` | Lanxi-可宋.woff2 | 2.79MB | 自备 |
+| 宋体·标题 | `Lanxi-朗宋` | Lanxi-朗宋.woff2 | 2.05MB | 自备 |
+| 宋体·副题 | `Lanxi-品宋` | Lanxi-品宋.woff2 | 2.53MB | 自备 |
+| 宋体·颜韵 | `Lanxi-颜宋` | Lanxi-颜宋.woff2 | 2.37MB | 自备 |
+| 极细·空灵 | `Lanxi-静黑超细` | Lanxi-静黑超细.woff2 | 1.39MB | 自备 |
+| 黑体·几何 | `Lanxi-点黑` | Lanxi-点黑.woff2 | 1.92MB | 自备 |
+| 冲击·超粗 | `Lanxi-超粗黑` | Lanxi-超粗黑.woff2 | 0.73MB | 自备 |
+| 可爱·卡通 | `Lanxi-卡通` | Lanxi-卡通.woff2 | 1.17MB | 自备 |
+| 可爱·手绘 | `Lanxi-叮叮` | Lanxi-叮叮.woff2 | 4.21MB | 自备 |
+| 可爱·萌系 | `Lanxi-喵喵` | Lanxi-喵喵.woff2 | 2.88MB | 自备 |
+| 手写·文人 | `Lanxi-春兰茅坤` | Lanxi-春兰茅坤.woff2 | 1.73MB | 自备 |
+| 书法·行书（刊头首选） | `Lanxi-鱼尾行书` | Lanxi-鱼尾行书.woff2 | 3.70MB | 自备 |
+| 书法·江湖 | `Lanxi-狂侠体` | Lanxi-狂侠体.woff2 | 3.57MB | 自备 |
+| 少女·手写日记（仅手账场景） | `Lanxi-暗恋初夏` | Lanxi-暗恋初夏.woff2 | 3.25MB | 自备 |
+| 少女·标题俏皮（仅手账场景） | `Lanxi-秀英体` | Lanxi-秀英体.woff2 | 1.82MB | 自备 |
+| 少女·软萌（仅手账场景） | `Lanxi-初心少女` | Lanxi-初心少女.woff2 | 1.46MB | 自备 |
+| 少女·童趣（仅手账场景） | `Lanxi-丫丫体` | Lanxi-丫丫体.woff2 | 1.65MB | 自备 |
+| 繁体·行书（须配繁体内容） | `Lanxi-鱼尾行书繁` | Lanxi-鱼尾行书繁.woff2 | 7.64MB | 自备 |
+
+> **口径说明（2026-10-18 复核修正）**：本表以 `assets/fonts/` 目录实测为准——**25 个 `.woff2`、合计 54.2MB**，与 `origin/main` 逐字节一致。
+> 此前一版曾按「20 款 / 39.4MB」写，并断言 `超粗黑`/`卡通`/`狂侠体`/`丫丫体`/`鱼尾行书繁` 五款「从未真正入库」——**该断言错误**：五款自 2026-10-13 接管上游（commit `a21bb7a`）起即在仓库中，是**本地工作副本只解出 20 个**造成的误判（旧文案的「26 款」是笔误，实为 25）。已从 `origin/main` 取回，本表据实补全。
 
 ### 0.1 外置全量（可选配置字体根目录后可用 · 参考清单 · 用户自备）
 
@@ -62,9 +65,7 @@
 | 艺术·海报 | `Lanxi-海报体` | `常用字体/华康海报体W12(P).ttf` |
 | 艺术·综艺 | `Lanxi-综艺` | `方正所有字体/02/FZfonts/FZZHYJW.TTF` |
 | 极细·秀美 | `Lanxi-浪倩` | `造字工房最全字体-2016-01-06更新/艺术字体/MFLangQian_Noncommercial-Regular.ttf` |
-| 书法·行书·繁 | `Lanxi-鱼尾行书繁` | `新增-2026-08-28/鱼尾书法行书-繁体.ttf`（繁体字库 · 须配繁体内容） |
 | 书法·狂草 | `Lanxi-狂派手书` | `新增-2026-08-28/Aa狂派手书.ttf` |
-| 书法·江湖 | `Lanxi-狂侠体` | `新增-2026-08-28/Aa狂侠体.ttf` |
 | 篆书·游龙 | `Lanxi-游龙篆书` | `新增-2026-08-28/字魂游龙篆书(商用需授权).ttf` |
 | 篆书·山北 | `Lanxi-山北篆体` | `新增-2026-08-28/依山北篆体.ttf` |
 | 手写·自由 | `Lanxi-自由浪漫` | `新增-2026-08-28/自由浪漫体.ttf` |
@@ -173,7 +174,7 @@
     - **v6.41（生效）**：改挂 `render` **入口**——`var src = stripHtmlComments(raw || '')` 提到处理链最上游；并且**剥完为空时返回空 Fragment 而非 `null`**（`null` 的语义是「我不渲染」，宿主会退回原文；空 Fragment 是「渲染成空」，注释就此消失）。判据 `src.trim() === '' && (raw||'').trim() !== ''`：只有「原文有东西、剥完没东西」才返空 Fragment，真空消息与「有内容但被处理链清空」仍返 `null`（不吞内容、不改既有路径）。`parseFrag` 里那层**保留**，管「注释跟着卡片一起进来」的场景，两层互补。
     - **v6.42（补 v6.41 的雷）**：v6.41 对未闭合注释是**无条件**截断到末尾（本意护流式中间帧），而朗读标记写残时（结尾只剩 `--`、或写成 `了。>`）那一刀就从标记处切到消息末尾——**正文与卡片一起被剥光，界面只剩「已完成，用时 N 秒」**（2026-10-15 先生连遇两次报障）。修法：`stripHtmlComments` 加 `lenient` 参数，`render` 入口传 `true`——宽容模式遇到未闭合 `<!--` 只吃掉**它所在的整行**（含行尾换行；标记协议上独占一行，删整行才不会把两侧正文粘成一行）再继续扫，行尾没换行时仍吃到末尾；`lenient !== true` 的老调用点（流式中间帧）保留原截断行为。配套：TTS 侧 `extractTtsSpokenOverride` 放宽认**行尾/文末**的 `--` 或 `>`（`dsh-maid-tts-fix` 0.6.3）——渲染侧保正文不消失，TTS 侧保写残也念得对。
     - **铁律（拿两次白工换来的）**：**钩子挂点必须挂在调用链的入口，不是下游。** 同一天在两处栽同一个坑——TTS 朗读标记挂 `applyTtsPlaybackScope`（被上游 `prepareTtsText` 清洗吃掉）、注释剥离挂 `parseFrag`（被 `render` 开头的空值检查短路）。**第二条判据**：钩子返回值有语义——`null` 是「没有」，空结构是「有但是空」，混为一谈就等于静默失效。**第三条（v6.42 换来的）**：**「防流式」的宽容逻辑不能无条件套在最终帧上**——同一段代码要在两个语境下表现不同，就得把语境（`lenient`）显式传进来，不能靠调用顺序碰运气。
-    - **验证**：`_probe/vcp-comment-v641-probe.mjs` 从源码正则抠出真实的 `stripHtmlComments` 与 `render` 跑 9 用例（不抄源码，改一行源码探针就跟着变）；`_probe/vcp-comment-v642-probe.mjs` 跑 10 用例（含三条残缺标记场景，直接用真实事故原文当输入）。`<pre><code>` 里的注释示例已在 `protectCodeEntities` 转义成 `&lt;!--`，不受影响。
+    - **验证**：`_probe/vcp-comment-v641-probe.mjs` 从源码正则抠出真实的 `stripHtmlComments` 与 `render` 跑 9 用例（不抄源码，改一行源码探针就跟着变）；`_probe/vcp-comment-v642-probe.mjs` 跑 13 用例（含四条残缺标记场景，直接用真实事故原文当输入）。`<pre><code>` 里的注释示例已在 `protectCodeEntities` 转义成 `&lt;!--`，不受影响。**（2026-10-18 `_probe/` 曾整目录丢失，已按原设计重建，v642 补了边界用例故 10 → 13。）**
     - **配套**：TTS 侧剥注释只是让它不被念，显形与否归渲染层——`dsh-maid-tts-fix` 的 `<!--tts:…-->` 标记必须两个补丁都打才完整。
     - **v10.3（补分支漏网 · 2026-10-16）**：v6.41/v6.42 那道钩子只挂在**走 `render()` 的两条分支**（`case"html"` / `case"code"`）上，另外两处会漏。① **`case"inlineCode"`**：标记被 Markdown 反引号包住时由这一分支渲染成 `<code>`，注释原样显形——补 `buildInlineCodeGuard` 极窄守卫（只有「原文以 `<!--` 开头且剥完为空 / 仍以 `<!--` 开头」才拦截，转交 `render` 剥成空 Fragment，普通行内代码零影响）。② **`case"code"` 判据太窄**：原先 `^` 锚定要求内容**以** `<div id="vcp-root"` 开头，卡片前多一行说明或标记就整卡退回源码——去掉锚定改成「**含**」（E′）。**升级路径要点**：v10 形态下 A/E/F 锚点已无法二次定位，但 `inlineCode` 分支没被前几项动过、锚点仍在，所以 `patchBundle` 的「已是 v10 形态」分支**不能直接 return**，要走 `patchInlineCode` 补装（返回 `upgradeOnly: true`）。**元教训**：修好一条路 ≠ 修好这件事——补渲染补丁前先把该 token 类型的**所有分支**枚举一遍，再挑渲染分支接钩子。
 

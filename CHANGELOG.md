@@ -2,6 +2,18 @@
 
 本文件记录插件版本（`package.json` 的 `version`）与补丁代号（`patch/*` 注入模块）两条线的演进。
 
+## 未发版 · `_probe/` 重建 + `asar-io` 修根（2026-10-18）
+
+- **背景**：文档里有 6 处引用 `_probe/` 探针，但该目录在仓库工作树中**整个不存在**——所有「N 用例全绿」都无法复现。同类问题 `dsh-maid-tts-fix` 有 16 处。
+- **重建**（全部实测通过，不抄源码，一律从 `patch/v6-inject.js` 抠真函数进 `node:vm`）：
+  - `_probe/vcp-comment-v641-probe.mjs` **9/9** —— 注释剥离在 `render` 最上游、剥空返空 Fragment 两条契约。
+  - `_probe/vcp-comment-v642-probe.mjs` **13/13** —— 宽容剥法边界（原记录 10 例，重建补齐残缺标记场景）。
+  - `_probe/vcp-verify-case-html.cjs` **8/8** —— 用 `patch/anchors.cjs` 真实常量；实测旧逻辑产物是 `}();}();`，文档早年的 `}();();` 是简写。
+  - `_probe/vcp-inlinecode-v103-probe.mjs` **14/14** —— G 项守卫边界 + 幂等 + E′ 旧判据清零 + 产物过 `node --check`。
+  - `_probe/verify-v103-in-asar.mjs` **8/8** —— 回读实机 asar 确认 v10.3 G 项真的装进去了。
+- **`patch/asar-io.cjs` 修根**：原先 `require('node:fs')`，在 `ELECTRON_RUN_AS_NODE=1` 下运行时 fs 已被 Electron 的 asar 包装接管，会把 `app.asar` **自己**当成 asar 内路径（`asarPath=app.asar`、`filePath=''`）→ `openSync` 直接 `ENOENT, not found in …app.asar`。改为优先 `require('node:original-fs')`、缺失再回落 `node:fs`。**这是根因修复**——此前每个调用方都得自己记得设 `process.noAsar = true`，漏一个就炸。
+- **元教训**：**文档里的验证证据必须指向仓库里真实存在的文件。** 引用一个不存在的探针，比不写验证更糟——它让后来的人以为「这里验过」，实际无从复现，只能重写一遍。
+
 ## 未发版 · 补丁器修复（2026-10-17）
 
 - **背景**：七仓体检（同日）扫 `patch/patch-frontend.cjs` 时发现替换表里并存两个 `case"html"` 旧态锚点，注释与实现不符。
