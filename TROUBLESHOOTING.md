@@ -50,6 +50,7 @@
 - **根因**：dry-run 在未打补丁的 asar 上会**完整执行替换计算并列出 applied 列表**，只是不写盘。它验证的是「锚点找得到」，不是「已经装上」。
 - **解法**：把 dry-run 当「体检/预演」，装没装要另找判据（见 7.3：`window.__vcpStable` + `window.__vcpGen` 双标记）。
 - **验证**：dry-run 后重启 DSH 刷新页面，渲染仍不生效 = 没写盘；正式跑一次后 asar 文件大小/mtime 变化且回读 sha256 一致。
+- **交付判据（补记 2026-10-18）**：只复原源码 + 接回 junction + 确认 `fiberPhase=active`，**不足以宣布「插件已恢复」**——这三步只证明加载链通了，不证明补丁装上了。曾据此交付「插件已恢复」，被老大一句「VCP补丁有弄上去吗？」当场打回。宣布恢复前必须实跑 `node patch/install-all.cjs` 并确认 asar 内 `window.__vcpStable` 为真；两条缺一条就只报「源码已复原，补丁未装」。
 - 来源：记忆库 lesson（0mv6n9ers）。
 
 ### 1.6 打包白名单漏 `styles/`、`examples/` → 装到别的电脑美学库直接失效
@@ -109,6 +110,46 @@
 - **解法**：删掉 `CASE_HTML_AFTER` 常量定义与该状态机分支（2026-10-17 七仓体检批次）。旧态统一由 `CASE_HTML_BEFORE` 承接；若某代际形态与它不符，则命中 0 次走既有 fail-loud 中止（`exit 1`，不写盘），不会静默产出坏文件。**通用教训：替换表里的锚点若互为前缀，短的那个必然抢跑——宁可让短锚点命中 0 次报错，也不要让它悄悄吃掉长锚点的一部分。**
 - **验证**：`node Works/_probe/vcp-verify-case-html.cjs` → 7 组断言全过（含「旧逻辑复现 `}();();` 并抛 SyntaxError」与「新逻辑产物语法通过」两条对照）；`node patch/check-anchors.cjs` → 10 组断言全过；`node --test tests/security.test.mjs` → 54 项断言全过。
 - 来源：七仓体检报告（2026-10-17，patch-frontend.cjs:102 注释与实际不符）；`patch/patch-frontend.cjs` 删除处注释。
+
+### 1.13 替换式补丁写 AFTER 串时吞掉声明前缀，消息树整块白屏
+
+- **症状**：补丁装完、健康检查也过，但消息列表整块白屏——组件一渲染就 `ReferenceError`，聊天区全空，刷新无效、重启无效。2026-10-13 16:34 至 2026-10-18 14:36 期间共出现 12 次。
+- **原因**：替换式前端补丁在写 `AFTER` 串时，只写了「锚点之后要追加的内容」，漏掉了锚点里原有的变量声明前缀，导致 `h` / `m` 变成未声明的自由变量。锚点字符串本身匹配成功、补丁「打上了」，但产物在组件渲染期才炸——静态锚点检查抓不到。
+- **解法**：铁律——**`AFTER` 串必须完整保留 `BEFORE` 里出现的所有声明**，替换是「整体换掉」，不是「在原锚点后追加」。改锚点时先在 `BEFORE` 里逐个点名所有 `const` / `let` / 解构声明，再逐字搬到 `AFTER` 开头。
+- **验证**：**未验**：本轮取证未留存原始 `ReferenceError` 报错串，也未找到改法落地后的回归记录。落盘前须补一次「装补丁 → 打开消息列表 → 有卡有文的会话各一条」的真机复验，并把报错原文补进本条。
+- 来源：会话取证 `_probe/_cand-session.md:25-31`（会话 `2c414941`、`3d3bfde6`）；同族规则已写入 `AGENTS.md` 的「AFTER 必须完整保留 BEFORE 中所有声明」。
+
+### 1.14 `ELECTRON_RUN_AS_NODE=1` 下 asar 补丁器把 app.asar 当成 asar 内路径，读写全报 ENOENT
+
+- **症状**：桌面端补丁器在 `ELECTRON_RUN_AS_NODE=1` 的 Electron 里跑时，所有对 `app.asar` 的读写都失败，报错形如 `Error: ENOENT: no such file or directory, open '…\resources\app.asar\…'` / `not found in …\resources\app.asar`。补丁程序「什么都没做」就退出。
+- **原因**：`ELECTRON_RUN_AS_NODE=1` 只让 Electron 当 Node 用，但 `require('node:fs')` 仍被 Electron 的 asar 包装接管；该包装把「宿主自己的 `app.asar`」也当成「asar 内部路径」去解析，于是在真实文件系统里去找 `app.asar\...` 这样的子路径，必然 ENOENT。
+- **解法**：补丁器统一走 `patch/asar-io.cjs` 取 fs——优先 `require('node:original-fs')`（绕过 asar 包装的真 fs），拿不到再退回 `node:fs`：
+
+  ```js
+  let fs
+  try { fs = require('node:original-fs') } catch { fs = require('node:fs') }
+  ```
+
+  同轮旁证：字体口径由 20 款复核为 25 款。
+- **验证**：`_probe/verify-v103-in-asar.mjs` 在 `ELECTRON_RUN_AS_NODE=1` 下 8/8 通过（仓内记录），另四支探针同轮通过（`vcp-inlinecode-v103` 14/14 等）。**未验**：真实 `install-all.cjs` 全流程在「asar 已被打过旧补丁」的机器上复测。
+- 来源：git `fda5bbc`、`c7f5083`（2026-10-18，CHANGELOG 记 v0.6.15，版本号以仓内 CHANGELOG 为准）；改动文件 `patch/asar-io.cjs`。
+- **与 preset 册 6.16 的关系**：同一根因（Electron 的 asar 包装把宿主 `app.asar` 当归档内路径），但证据不重叠——6.16 记的是**读取**这一侧、验证只到「阅读实现确认分支存在」；本条记的是**补丁器在 `ELECTRON_RUN_AS_NODE=1` 下的读写**，带提交号与 8/8 探针结果。两册读者各自在册内能查到手边那一半，故不合并成一条。
+
+### 1.15 强制刷新触发 loader 把 fiber 卸载误判成「用户禁用」，此后 boot 审计弹 `import failed`
+
+- **症状**：桌面端强制刷新（或在该页反复重载）后插件不再加载，启动阶段弹出审计错误，文案形如 `${id}: import failed`；重装/重启都不恢复，只能改回宿主原始 asar。2026-10-15 23:57 至 2026-10-18 15:05 共出现 10 次。
+- **原因**：渲染侧 loader 的卸载监听把「fiber 卸载」误判成「用户手动禁用插件」，往 `entry.disabled` 写入禁用标记；重建闸门 `async refresh(){ this.fiber || this.disabled || await this.init() }` 因此永久短路，`init()` 再也不跑。boot 审计拿不到模块就抛错弹窗——弹窗文案只说 import 失败，指向不到 disabled 标记。
+- **解法**：**根因未证实（待核：卸载事件与「用户禁用」的区分判据尚未定案）**。当前只做了绕过——用 asar 补丁把 boot 审计里的 `throw` 改成 `console.error`，让弹窗消失、页面能用；`entry.disabled` 被误写的机制仍在。
+- **验证**：**未验**：绕过方式无回归记录（改完只是不再弹窗，插件是否恢复加载未实测）。复现判据：强制刷新数次 → 看 `entry.disabled` 是否变 true → 手动清零后能否恢复。
+- 来源：会话取证 `_probe/_cand-session.md:273-279`（会话 `D-DeepSeek~0020Harness-Works/session-`、`2c414941`）。
+
+### 1.16 本地仓没有 `.git` 就直接对远端：双向分叉 + 乱码文件名，两边同版本号却不是同一份
+
+- **症状**：本地工作副本与远端都标 v0.6.14，但两边 MD5 不同；直接「本地覆盖远端」会丢掉远端独有文件，直接「远端覆盖本地」会丢掉本地 5 处领先改动。远端还多出 5 个文件名是乱码的字体文件，安装后字体菜单里显示成一串问号。
+- **原因**：本地工作副本无 `.git`（一直靠文件拷贝同步），比对只能靠人眼/哈希，分叉无人记账；且文件曾经过 UTF-8 → GBK 二次解码，名字被破坏（编码问题本身见 §4.9）。被 `.gitignore` 的 `_probe/` 目录在真做 `git add` 时需要 `add -f` 才会被带上——这条也容易漏。
+- **解法**：接手时先做三件事再动手——①`git -C <远端副本> log --oneline -1` 记下 HEAD（当时为 `4652fb8`）；②逐文件 MD5 比对，把「仅远端有」「仅本地有」「两份都有但不同」三类列成表；③乱码文件名的 5 个字体按原名重下，别在乱码名上改。
+- **验证**：已核：远端 HEAD `4652fb8`、远端多 6 个文件（5 款字体共 14.76MB + `examples/情书·春水笺.html`）、本地多 5 处改动 + 5 个 `_probe`（需 `add -f`）、两边版本号同为 v0.6.14 但 MD5 不同。
+- 来源：记忆 `0mvdv7157-c70256daf13b49f6ac43907684`（topic / dsh-maid-vcp）。
 
 ---
 
