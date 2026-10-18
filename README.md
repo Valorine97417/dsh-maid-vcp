@@ -68,7 +68,7 @@
 
 ## 版本
 
-- **插件版本**：`package.json` 的 `version`（当前 **0.6.14**），随 `dsh plugin` 升级。
+- **插件版本**：`package.json` 的 `version`（当前 **0.6.15**），随 `dsh plugin` 升级。
 - **补丁代号**：`patch/` 注入模块的演进代号，由安装器应用到前端 bundle，二者独立演进：
   - **桌面端（Electron）**：**v10.3 · 追加式写入**（`patch/patch-frontend-asar.cjs`）——直接在 `app.asar` 内原地替换 bundle，自动重算 integrity、原地回写规避 `EBUSY`。**先扫描 bundle 推导压缩后符号表再生成锚点**，前端升级换了变量名（jsx `f→l`、React `R→j`、`vc(n,r)→vc(e,n)` 等）也能自动适配，探测不到的增强能力跳过并告警、基础渲染照常安装。**已是 v10 形态时不再短路跳过**：用模块自身的 `START`/`END` 标记夹取旧模块整段替换为磁盘最新版（`v6-inject.js` 改了 bug 之后重跑 install-all 即生效，不用手动改 asar）。v10.2 起替换条目走**追加式**（新内容写数据区末尾 + 头部保长补空格），运行中的 DSH 不会因偏移平移错位崩溃，重启后生效；开跑前 `tasklist` 探测 DSH 运行状态并提示。
   - **Web 端 / 独立 bundle**：**v6 · 子版本 v6.41**（`patch/install-v6.cjs`），前端兼容 **0.0.1-rc.5 ~ 0.1.0-rc.7** 与 **0.1.0-rc.8 / 0.1.1-rc.x** 两代压缩形态（vc/hp 与 Xu/jd 自动探测适配）。
